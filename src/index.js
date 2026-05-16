@@ -11,7 +11,9 @@ import {
   Events,
   ActivityType,
 } from 'discord.js';
+import http from 'http';
 import { config } from './config.js';
+
 import { initDatabase } from './database.js';
 import {
   startPresenceTracking,
@@ -270,7 +272,17 @@ process.on('unhandledRejection', (reason) => {
   // Registra / atualiza os comandos slash no Discord
   await deployCommands();
 
+  // Cria um servidor HTTP simples para passar no Health Check do Railway/Render
+  const PORT = process.env.PORT || 3000;
+  http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('Bot is online!');
+  }).listen(PORT, () => {
+    console.log(`📡 Servidor de Health Check ativo na porta ${PORT}`);
+  });
+
   // Conecta ao Discord
   await client.login(config.token);
 })();
+
 
