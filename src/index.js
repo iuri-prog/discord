@@ -31,9 +31,11 @@ import {
   disconnectAll,
 } from './voiceManager.js';
 
-// Importa os comandos
+// Importa os comandos e script de deploy
 import * as statusvozCommand from './commands/statusvoz.js';
 import * as topfalaCommand from './commands/topfala.js';
+import { deployCommands } from './commands/deploy.js';
+
 
 // ============================================
 // 1. Cria o client do Discord com as intents necessárias
@@ -265,6 +267,10 @@ process.on('unhandledRejection', (reason) => {
   // Inicializa o banco de dados
   await initDatabase();
 
+  // Registra / atualiza os comandos slash no Discord
+  await deployCommands();
+
   // Conecta ao Discord
   await client.login(config.token);
 })();
+

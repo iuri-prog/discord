@@ -1,9 +1,8 @@
 // ============================================
 // commands/deploy.js — Deploy dos Slash Commands
 // ============================================
-// Execute este script UMA VEZ para registrar os
-// comandos de barra no Discord:
-//   node src/commands/deploy.js
+// Pode ser executado via CLI: npm run deploy-commands
+// Ou importado para rodar no startup do bot.
 
 import { REST, Routes } from 'discord.js';
 import { config } from '../config.js';
@@ -14,13 +13,11 @@ const commands = [statusvoz.toJSON(), topfala.toJSON()];
 
 const rest = new REST({ version: '10' }).setToken(config.token);
 
-(async () => {
+export async function deployCommands() {
   try {
     console.log(`📡 Registrando ${commands.length} comando(s) de barra...`);
 
     // Registra os comandos no servidor (guild) específico
-    // Para registro global (todos os servidores), use:
-    //   Routes.applicationCommands(config.clientId)
     const data = await rest.put(
       Routes.applicationGuildCommands(config.clientId, config.guildId),
       { body: commands }
@@ -29,7 +26,15 @@ const rest = new REST({ version: '10' }).setToken(config.token);
     console.log(`✅ ${data.length} comando(s) registrado(s) com sucesso!`);
     console.log('   Comandos disponíveis:');
     data.forEach((cmd) => console.log(`   - /${cmd.name}: ${cmd.description}`));
+    return true;
   } catch (error) {
     console.error('❌ Erro ao registrar comandos:', error);
+    return false;
   }
-})();
+}
+
+// Se executado diretamente via CLI
+if (process.argv[1] && (process.argv[1].endsWith('deploy.js') || process.argv[1].endsWith('deploy'))) {
+  deployCommands();
+}
+
