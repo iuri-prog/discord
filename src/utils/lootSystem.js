@@ -18,7 +18,7 @@ export const LOOT_TABLE = [
     id: 'coruja',
     icon: '🦉',
     name: 'Coruja da Madrugada',
-    tag: '[🦉Coruja]',
+    tag: '🦉',
     chance: 0.15, // 15% de chance
     condition: () => {
       const hora = new Date().getHours();
@@ -29,7 +29,7 @@ export const LOOT_TABLE = [
     id: 'onfire',
     icon: '🔥',
     name: 'Máquina de Falar',
-    tag: '[🔥On Fire]',
+    tag: '🔥',
     chance: 0.05, // 5% de chance
     condition: (speakDurationSeconds) => {
       return speakDurationSeconds > 300; // Falou por mais de 5 minutos direto
@@ -39,8 +39,8 @@ export const LOOT_TABLE = [
     id: 'tagarela',
     icon: '🗣️',
     name: 'Tagarela Inveterado',
-    tag: '[🗣️Tagarela]',
-    chance: 0.08, 
+    tag: '🗣️',
+    chance: 0.08,
     condition: (speakDurationSeconds) => {
       return speakDurationSeconds > 120 && speakDurationSeconds <= 300; // Entre 2 e 5 mins diretos
     }
@@ -49,7 +49,7 @@ export const LOOT_TABLE = [
     id: 'sortudo',
     icon: '🎲',
     name: 'Sortudo do Microfone',
-    tag: '[🎲Sorte]',
+    tag: '🎲',
     chance: 0.01, // 1% de chance (muito raro)
     condition: () => true // Pode dropar a qualquer momento que a pessoa pare de falar
   },
@@ -57,7 +57,7 @@ export const LOOT_TABLE = [
     id: 'fantasma',
     icon: '👻',
     name: 'Fantasma Tagarela',
-    tag: '[👻Fantasma]',
+    tag: '👻',
     chance: 0.03,
     condition: (speakDurationSeconds) => {
       const hora = new Date().getHours();
@@ -68,7 +68,7 @@ export const LOOT_TABLE = [
     id: 'cafe',
     icon: '☕',
     name: 'Bom Dia, Vietnam!',
-    tag: '[☕Café]',
+    tag: '☕',
     chance: 0.10,
     condition: () => {
       const hora = new Date().getHours();
@@ -79,7 +79,7 @@ export const LOOT_TABLE = [
     id: 'orador',
     icon: '🎙️',
     name: 'O Grande Orador',
-    tag: '[🎙️Orador]',
+    tag: '🎙️',
     chance: 0.20, // Alta chance, pois é difícil atingir
     condition: (speakDurationSeconds) => {
       return speakDurationSeconds >= 600; // Falou por mais de 10 minutos diretos!
@@ -89,7 +89,7 @@ export const LOOT_TABLE = [
     id: 'velocista',
     icon: '⚡',
     name: 'Velocista Vocal',
-    tag: '[⚡Velocista]',
+    tag: '⚡',
     chance: 0.05,
     condition: (speakDurationSeconds) => {
       return speakDurationSeconds >= 5 && speakDurationSeconds <= 8; // Falas muito rápidas, mas válidas
@@ -99,7 +99,7 @@ export const LOOT_TABLE = [
     id: 'sabado',
     icon: '🍻',
     name: 'Inimigo do Fim',
-    tag: '[🍻Inimigo]',
+    tag: '🍻',
     chance: 0.10,
     condition: () => {
       const day = new Date().getDay();
@@ -191,8 +191,8 @@ async function announceLootDrop(client, guildId, channelId, userId, loot) {
       const currentName = member.displayName;
       // Evita duplicar tags
       if (!currentName.includes(loot.tag)) {
-        // Limite do Discord é 32 caracteres para nicknames
-        const newName = `${loot.tag} ${currentName}`.substring(0, 32);
+        // Limite do Discord é 32 caracteres para nicknames (sufixo agora)
+        const newName = `${currentName} ${loot.tag}`.substring(0, 32);
         await member.setNickname(newName, `Conquista desbloqueada: ${loot.name}`);
 
         // Agenda a remoção da tag após 24 horas
@@ -200,7 +200,7 @@ async function announceLootDrop(client, guildId, channelId, userId, loot) {
           member.guild.members.fetch(userId).then(m => {
             if (m && m.manageable && m.displayName.includes(loot.tag)) {
               // Limpa a tag do nome
-              const revertedName = m.displayName.replace(`${loot.tag} `, '').replace(loot.tag, '');
+              const revertedName = m.displayName.replace(` ${loot.tag}`, '').replace(loot.tag, '');
               m.setNickname(revertedName.substring(0, 32), 'Expirou o tempo de 24h da tag de conquista');
             }
           }).catch(() => {});
