@@ -165,7 +165,7 @@ export async function syncVoiceChannels(guild, client) {
     (ch) => ch.type === ChannelType.GuildVoice || ch.type === ChannelType.GuildStageVoice
   );
 
-  // 1. Desconecta de qualquer canal que esteja vazio
+  // 1. Desconecta de qualquer canal que esteja vazio e que o bot esteja conectado
   for (const [channelId, channel] of voiceChannels) {
     const humanMembers = channel.members.filter((m) => !m.user.bot).size;
     if (humanMembers === 0 && activeConnections.has(channelId)) {
@@ -173,19 +173,40 @@ export async function syncVoiceChannels(guild, client) {
     }
   }
 
-  // 2. Verifica se o bot já está conectado em algum outro canal do mesmo servidor
-  const isAlreadyConnected = [...activeConnections.values()].some(
-    (conn) => conn.guildId === guild.id
-  );
+  // 2. Encontra o canal mais cheio (com mais humanos ativos)
+  let busiestChannel = null;
+  let maxHumans = 0;
 
-  // 3. Se não estiver conectado em nenhum canal deste servidor, entra no primeiro canal ativo que encontrar
-  if (!isAlreadyConnected) {
-    const activeChannel = voiceChannels.find(
-      (ch) => ch.members.filter((m) => !m.user.bot).size > 0
+  for (const [, channel] of voiceChannels) {
+    const humanMembers = channel.members.filter((m) => !m.user.bot).size;
+    if (humanMembers > maxHumans) {
+      maxHumans = humanMembers;
+      busiestChannel = channel;
+    }
+  }
+
+  // 3. Gerencia a conexão com base no canal mais cheio
+  if (busiestChannel) {
+    // Verifica se já estamos conectados a algum canal neste servidor
+    const currentConnectionEntry = [...activeConnections.entries()].find(
+      ([, conn]) => conn.guildId === guild.id
     );
 
-    if (activeChannel) {
-      await joinChannel(activeChannel, client);
+    if (currentConnectionEntry) {
+      const [currentChannelId] = currentConnectionEntry;
+      
+      // Se o canal mais cheio for diferente do canal que o bot está agora, muda de canal!
+      if (currentChannelId !== busiestChannel.id) {
+        console.log(
+          `🔄 [VOZ] Mudando para o canal mais cheio: ${busiestChannel.name} (${maxHumans} usuários) ` +
+          `— saindo do canal antigo (${currentChannelId})`
+        );
+        await leaveChannel(currentChannelId, guild.id);
+        await joinChannel(busiestChannel, client);
+      }
+    } else {
+      // Se não estava em nenhum canal, entra no mais cheio
+      await joinChannel(busiestChannel, client);
     }
   }
 }

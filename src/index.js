@@ -141,52 +141,26 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
   if (!oldChannelId && newChannelId) {
     startPresenceTracking(userId, username, newChannelId);
 
-    // Conecta o bot no canal (se ainda não estiver lá)
-    if (newState.channel) {
-      await joinChannel(newState.channel, client);
-    }
+    // Sincroniza para garantir que o bot está no canal mais cheio
+    await syncVoiceChannels(newState.guild, client);
   }
 
   // ─── Caso 2: Usuário SAIU de um canal de voz ─────────────
   else if (oldChannelId && !newChannelId) {
     await stopPresenceTracking(userId);
 
-    // Verifica se o canal antigo ficou vazio (sem humanos)
-    if (oldState.channel) {
-      const humanMembers = oldState.channel.members.filter((m) => !m.user.bot).size;
-      if (humanMembers === 0) {
-        await leaveChannel(oldChannelId, oldState.guild.id);
-        
-        // Verifica se há outros canais ativos no servidor para entrar
-        await syncVoiceChannels(oldState.guild, client);
-      }
-    }
+    // Sincroniza para atualizar a conexão do bot para o canal mais cheio (ou desconectar se tudo estiver vazio)
+    await syncVoiceChannels(oldState.guild, client);
   }
-
 
   // ─── Caso 3: Usuário TROCOU de canal ─────────────
   else if (oldChannelId && newChannelId && oldChannelId !== newChannelId) {
-    // Finaliza a sessão do canal antigo
+    // Finaliza a sessão do canal antigo e inicia no novo
     await stopPresenceTracking(userId);
-
-    // Inicia nova sessão no canal novo
     startPresenceTracking(userId, username, newChannelId);
 
-    // Conecta o bot no novo canal
-    if (newState.channel) {
-      await joinChannel(newState.channel, client);
-    }
-
-    // Verifica se o canal antigo ficou vazio
-    if (oldState.channel) {
-      const humanMembers = oldState.channel.members.filter((m) => !m.user.bot).size;
-      if (humanMembers === 0) {
-        await leaveChannel(oldChannelId, oldState.guild.id);
-        
-        // Verifica se há outros canais ativos no servidor para entrar
-        await syncVoiceChannels(oldState.guild, client);
-      }
-    }
+    // Sincroniza para atualizar a conexão do bot para o canal mais cheio
+    await syncVoiceChannels(newState.guild, client);
   }
 
 
