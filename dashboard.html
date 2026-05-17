@@ -12,6 +12,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- ApexCharts CDN for stunning charts -->
   <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+  <!-- Vis Network CDN for Social Graph -->
+  <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
   <!-- Supabase CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   
@@ -194,6 +196,9 @@
         <button onclick="switchTab('tabHistory')" id="btnTabHistory" class="tab-btn px-5 py-3 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition">
           Evolução Histórica
         </button>
+        <button onclick="switchTab('tabNetwork')" id="btnTabNetwork" class="tab-btn px-5 py-3 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition">
+          Gráfico Social
+        </button>
       </div>
 
       <!-- ─── ABA 1: VISÃO GERAL & LEADERBOARDS ─── -->
@@ -291,6 +296,16 @@
           <p class="text-xs text-slate-400 mb-6">Mapeamento de horas ativas acumuladas no servidor nos últimos 30 dias</p>
         </div>
         <div id="historyChart" class="w-full"></div>
+      </div>
+
+      <!-- ─── ABA 5: GRÁFICO SOCIAL ─── -->
+      <div id="tabNetwork" class="tab-content hidden glass-panel p-6 rounded-3xl flex flex-col justify-between">
+        <div>
+          <h3 class="text-lg font-bold text-white mb-1">Grafo de Influência Social</h3>
+          <p class="text-xs text-slate-400 mb-6">Visualização de quem fala com quem. Baseado na sobreposição de sessões no mesmo canal de voz.</p>
+        </div>
+        <!-- Contêiner do vis-network precisa ter altura definida -->
+        <div id="networkGraphContainer" class="w-full h-[500px] border border-slate-800 rounded-xl bg-black/30"></div>
       </div>
 
     </div>
@@ -449,6 +464,7 @@
       renderHeatmapChart();
       renderScatterChart();
       renderHistoryChart();
+      renderNetworkChart();
     }
 
     function updateOverviewCards() {
@@ -768,6 +784,108 @@
       if (charts.history) charts.history.destroy();
       charts.history = new ApexCharts(document.querySelector("#historyChart"), options);
       charts.history.render();
+    }
+
+    // ─── ABA 5: GRÁFICO SOCIAL (VIS-NETWORK) ───
+    let networkGraph = null;
+    function renderNetworkChart() {
+      if (!window.vis) return;
+
+      const nodesMap = new Map();
+      const edgesMap = new Map(); // key: "id1:id2", value: weight
+
+      // 1. Agrupa sessões por canal
+      const channels = {};
+      cachedSessions.forEach(session => {
+        if (!session.joined_at || !session.left_at) return;
+        if (!channels[session.channel_id]) channels[session.channel_id] = [];
+        channels[session.channel_id].push({
+          userId: session.user_id,
+          username: session.username,
+          start: new Date(session.joined_at).getTime(),
+          end: new Date(session.left_at).getTime()
+        });
+        
+        // Garante que todos existam como nós
+        if (!nodesMap.has(session.user_id)) {
+          nodesMap.set(session.user_id, { id: session.user_id, label: session.username, value: 0 });
+        }
+      });
+
+      // 2. Calcula sobreposição (overlap) por canal
+      for (const channelId in channels) {
+        const sessions = channels[channelId];
+        // Ordena por início
+        sessions.sort((a, b) => a.start - b.start);
+
+        for (let i = 0; i < sessions.length; i++) {
+          const a = sessions[i];
+          // Aumenta o tamanho do nó baseado no tempo que ele gasta no canal
+          const node = nodesMap.get(a.userId);
+          node.value += (a.end - a.start) / 1000; 
+
+          for (let j = i + 1; j < sessions.length; j++) {
+            const b = sessions[j];
+            // Se B começou depois que A terminou, não há mais overlaps para A
+            if (b.start >= a.end) break;
+            // Se for o mesmo usuário em sessões quebradas, ignora
+            if (a.userId === b.userId) continue;
+
+            // Calcula a interseção (overlap)
+            const overlapStart = Math.max(a.start, b.start);
+            const overlapEnd = Math.min(a.end, b.end);
+            const overlapSeconds = (overlapEnd - overlapStart) / 1000;
+
+            if (overlapSeconds > 0) {
+              const ids = [a.userId, b.userId].sort();
+              const edgeKey = `${ids[0]}:${ids[1]}`;
+              edgesMap.set(edgeKey, (edgesMap.get(edgeKey) || 0) + overlapSeconds);
+            }
+          }
+        }
+      }
+
+      const nodes = Array.from(nodesMap.values()).map(n => ({
+        id: n.id,
+        label: n.label,
+        value: n.value,
+        title: `Tempo total: ${formatDuration(n.value)}`,
+        color: { background: '#8b5cf6', border: '#6d28d9', highlight: { background: '#ec4899', border: '#be185d' } },
+        font: { color: '#ffffff' }
+      }));
+
+      // Filtra arestas irrelevantes (menos de 60 segundos de overlap) para não poluir
+      const edges = [];
+      for (const [key, weight] of edgesMap.entries()) {
+        if (weight > 60) {
+          const [from, to] = key.split(':');
+          edges.push({
+            from,
+            to,
+            value: weight, // Define a espessura da linha
+            title: `Conexão: ${formatDuration(weight)} juntos`,
+            color: { color: 'rgba(59, 130, 246, 0.4)', highlight: '#3b82f6' }
+          });
+        }
+      }
+
+      const container = document.getElementById('networkGraphContainer');
+      const data = { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) };
+      const options = {
+        nodes: { shape: 'dot', scaling: { min: 10, max: 40 } },
+        edges: { smooth: { type: 'continuous' } },
+        physics: {
+          forceAtlas2Based: { gravitationalConstant: -50, centralGravity: 0.01, springLength: 100, springConstant: 0.08 },
+          maxVelocity: 50,
+          solver: 'forceAtlas2Based',
+          timestep: 0.35,
+          stabilization: { iterations: 150 }
+        },
+        interaction: { hover: true, tooltipDelay: 200 }
+      };
+
+      if (networkGraph) networkGraph.destroy();
+      networkGraph = new vis.Network(container, data, options);
     }
 
     // ==================== UTILS ====================

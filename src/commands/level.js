@@ -4,7 +4,7 @@
 // Mostra o nível de voz, XP, patente e progresso de um usuário.
 
 import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
-import { getUserMetrics } from '../database.js';
+import { getUserMetrics, getUserBadges } from '../database.js';
 import { getLevelData, renderProgressBar } from '../utils/levels.js';
 import { formatTime } from '../utils/formatTime.js';
 
@@ -22,7 +22,12 @@ export async function execute(interaction) {
   await interaction.deferReply();
 
   const targetUser = interaction.options.getUser('usuario') || interaction.user;
-  const metrics = await getUserMetrics(targetUser.id);
+  
+  // Busca métricas e badges em paralelo
+  const [metrics, badges] = await Promise.all([
+    getUserMetrics(targetUser.id),
+    getUserBadges(targetUser.id)
+  ]);
 
   if (!metrics) {
     const emptyEmbed = new EmbedBuilder()
@@ -43,6 +48,12 @@ export async function execute(interaction) {
   
   const presenceFormatted = formatTime(metrics.total_presence_time);
   const speakingFormatted = formatTime(metrics.total_speaking_time);
+
+  // Formata as badges para exibir no inventário
+  let badgesDisplay = 'Nenhuma conquista desbloqueada ainda. Fale mais para dropar loot!';
+  if (badges && badges.length > 0) {
+    badgesDisplay = badges.map(b => `${b.badge_icon} **${b.badge_name}**`).join(' | ');
+  }
 
   const embed = new EmbedBuilder()
     .setColor(0x8B5CF6) // Roxo Violeta
@@ -79,6 +90,11 @@ export async function execute(interaction) {
         name: '🗣️ Fala Real (3x XP)',
         value: `\`${speakingFormatted}\` *(+${Math.floor(metrics.total_speaking_time * 3)} XP)*`,
         inline: true,
+      },
+      {
+        name: '🎒 Inventário de Conquistas (Loot)',
+        value: badgesDisplay,
+        inline: false,
       }
     )
     .setFooter({

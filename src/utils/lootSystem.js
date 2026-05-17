@@ -1,0 +1,151 @@
+// ============================================
+// utils/lootSystem.js — Motor de Drops e Badges
+// ============================================
+
+import { awardBadge, getUserBadges } from '../database.js';
+
+/**
+ * Tabela de Drops Dinâmicos (Loot).
+ * 'chance' é o percentual base de chance por tentativa (0 a 1).
+ * 'condition' avalia se o usuário está elegível naquele momento.
+ */
+export const LOOT_TABLE = [
+  {
+    id: 'coruja',
+    icon: '🦉',
+    name: 'Coruja da Madrugada',
+    tag: '[Coruja]',
+    chance: 0.15, // 15% de chance
+    condition: () => {
+      const hora = new Date().getHours();
+      return hora >= 2 && hora <= 5; // Entre 2 AM e 5 AM
+    }
+  },
+  {
+    id: 'onfire',
+    icon: '🔥',
+    name: 'Máquina de Falar',
+    tag: '[On Fire]',
+    chance: 0.05, // 5% de chance
+    condition: (speakDurationSeconds) => {
+      return speakDurationSeconds > 300; // Falou por mais de 5 minutos direto
+    }
+  },
+  {
+    id: 'tagarela',
+    icon: '🗣️',
+    name: 'Tagarela Inveterado',
+    tag: '[Tagarela]',
+    chance: 0.08, 
+    condition: (speakDurationSeconds) => {
+      return speakDurationSeconds > 120 && speakDurationSeconds <= 300; // Entre 2 e 5 mins diretos
+    }
+  },
+  {
+    id: 'sortudo',
+    icon: '🎲',
+    name: 'Sortudo do Microfone',
+    tag: '[Sorte]',
+    chance: 0.01, // 1% de chance (muito raro)
+    condition: () => true // Pode dropar a qualquer momento que a pessoa pare de falar
+  },
+  {
+    id: 'fantasma',
+    icon: '👻',
+    name: 'Fantasma Tagarela',
+    tag: '[Fantasma]',
+    chance: 0.03,
+    condition: (speakDurationSeconds) => {
+      const hora = new Date().getHours();
+      return hora === 0; // Dropa à Meia-noite (hora das bruxas)
+    }
+  }
+];
+
+/**
+ * Tenta dropar um loot para o usuário baseado na sorte e condições.
+ * @param {import('discord.js').Client} client 
+ * @param {string} guildId 
+ * @param {string} channelId 
+ * @param {string} userId 
+ * @param {string} username 
+ * @param {number} speakDurationSeconds 
+ */
+export async function evaluateLootDrop(client, guildId, channelId, userId, username, speakDurationSeconds) {
+  // Ignorar falas muito curtas (menos de 5 segundos) para não spammar rolagens
+  if (speakDurationSeconds < 5) return;
+
+  // Busca conquistas atuais para não dar o mesmo loot duplicado (opcional, mas recomendado)
+  const existingBadges = await getUserBadges(userId);
+  const earnedBadgeIds = existingBadges.map(b => b.badge_name); // Vamos checar pelo nome
+
+  // Avaliar loots elegíveis
+  const eligibleLoots = LOOT_TABLE.filter(loot => 
+    loot.condition(speakDurationSeconds) && 
+    !earnedBadgeIds.includes(loot.name)
+  );
+
+  if (eligibleLoots.length === 0) return; // Não há loots possíveis ou já tem todos
+
+  // Rolagem de dados (RNG)
+  for (const loot of eligibleLoots) {
+    const roll = Math.random(); // Gera número entre 0 e 1
+    
+    // Se a rolagem for menor ou igual à chance (ex: 0.04 <= 0.05) -> VENCEU!
+    if (roll <= loot.chance) {
+      console.log(`🎁 [LOOT DROP] ${username} ganhou a conquista: ${loot.name}`);
+      
+      // Salva no banco de dados
+      await awardBadge(userId, username, loot.icon, loot.name, loot.tag);
+
+      // Dispara a recompensa visual no Discord
+      await announceLootDrop(client, guildId, channelId, userId, loot);
+      
+      // Garante que só ganhe 1 loot por avaliação
+      break; 
+    }
+  }
+}
+
+/**
+ * Anuncia no servidor e muda o apelido temporariamente (ou adiciona a tag).
+ */
+async function announceLootDrop(client, guildId, channelId, userId, loot) {
+  try {
+    const guild = await client.guilds.fetch(guildId);
+    if (!guild) return;
+
+    // Buscar o membro para mudar o apelido
+    const member = await guild.members.fetch(userId);
+    
+    // Enviar mensagem no chat de texto vinculado ao canal de voz (se possível)
+    const channel = await guild.channels.fetch(channelId);
+    if (channel && channel.isTextBased()) { // A partir de certas atualizações, canais de voz têm chat de texto associado
+      await channel.send({
+        content: `🎉 **DROP ÉPICO!** ${member.user} acaba de desbloquear uma nova conquista secreta: **${loot.icon} ${loot.name}**!\nUma tag especial \`${loot.tag}\` foi adicionada ao seu perfil!`
+      });
+    } else {
+      // Se não conseguir mandar no chat do canal de voz, pode mandar no canal do sistema (systemChannel)
+      if (guild.systemChannel) {
+        await guild.systemChannel.send({
+          content: `🎉 **DROP DE VOZ!** ${member.user} desbloqueou a conquista secreta: **${loot.icon} ${loot.name}** lá no canal de voz!`
+        });
+      }
+    }
+
+    // Mudar o nickname (adicionar a tag)
+    // OBS: O bot precisa ter permissão de Gerenciar Apelidos e estar ACIMA do usuário na hierarquia de cargos
+    if (member.manageable) {
+      const currentName = member.displayName;
+      // Evita duplicar tags
+      if (!currentName.includes(loot.tag)) {
+        // Limite do Discord é 32 caracteres para nicknames
+        const newName = `${loot.tag} ${currentName}`.substring(0, 32);
+        await member.setNickname(newName, `Conquista desbloqueada: ${loot.name}`);
+      }
+    }
+
+  } catch (error) {
+    console.error('❌ Erro ao processar recompensa visual do loot:', error.message);
+  }
+}

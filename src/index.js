@@ -44,7 +44,7 @@ import { deployCommands } from './commands/deploy.js';
 // ============================================
 // 1. Cria o client do Discord com as intents necessárias
 // ============================================
-const client = new Client({
+export const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,           // Acesso a servidores
     GatewayIntentBits.GuildVoiceStates,  // Eventos de voz (join/leave/mute/deaf)

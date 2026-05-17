@@ -5,7 +5,9 @@
 // efetivamente falando (emitindo som) em canais de voz.
 
 import { addSpeakingTime } from './database.js';
-import { incrementSessionSpeakingTime } from './voiceTracker.js';
+import { incrementSessionSpeakingTime, getSessionChannelId } from './voiceTracker.js';
+import { evaluateLootDrop } from './utils/lootSystem.js';
+import { client } from './index.js';
 
 /**
  * Map em memória para rastrear timestamps de início de fala.
@@ -65,6 +67,15 @@ export async function stopSpeaking(guildId, userId) {
     await addSpeakingTime(userId, session.username, elapsed);
     // Acumula também na sessão de voz ativa (para o histórico)
     incrementSessionSpeakingTime(userId, elapsed);
+    
+    // Tenta dropar um Loot!
+    const channelId = getSessionChannelId(userId);
+    if (channelId) {
+      // Não bloqueia a execução principal com await
+      evaluateLootDrop(client, guildId, channelId, userId, session.username, elapsed).catch(err => {
+        console.error('❌ Erro no evaluateLootDrop:', err.message);
+      });
+    }
   }
 
   return elapsed;

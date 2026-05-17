@@ -232,4 +232,47 @@ export async function getTopLevels(limit = 10) {
     .slice(0, limit);
 }
 
+/**
+ * Concede uma nova patente/badge (loot drop) para um usuário no banco de dados.
+ * @param {string} userId - ID do usuário
+ * @param {string} username - Nome do usuário
+ * @param {string} badgeIcon - Ícone/Emoji da Badge
+ * @param {string} badgeName - Nome da Badge
+ * @param {string} badgeTag - Tag associada (ex: [Coruja])
+ */
+export async function awardBadge(userId, username, badgeIcon, badgeName, badgeTag) {
+  const { error } = await supabase
+    .from('user_badges')
+    .insert({
+      user_id: userId,
+      username: username,
+      badge_icon: badgeIcon,
+      badge_name: badgeName,
+      badge_tag: badgeTag || ''
+    });
+
+  if (error) {
+    console.error(`❌ Erro ao conceder badge para ${username}:`, error.message);
+  }
+}
+
+/**
+ * Busca todas as badges de um usuário.
+ * @param {string} userId - ID do usuário
+ * @returns {Array} Lista de badges do usuário
+ */
+export async function getUserBadges(userId) {
+  const { data, error } = await supabase
+    .from('user_badges')
+    .select('*')
+    .eq('user_id', userId)
+    .order('earned_at', { ascending: false });
+
+  if (error) {
+    console.error(`❌ Erro ao buscar badges do usuário ${userId}:`, error.message);
+    return [];
+  }
+  return data || [];
+}
+
 export { supabase };

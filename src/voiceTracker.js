@@ -97,6 +97,16 @@ export function isTracking(userId) {
 }
 
 /**
+ * Retorna o ID do canal onde o usuário está no momento.
+ * @param {string} userId - ID do usuário
+ * @returns {string|null} ID do canal ou null se não estiver em nenhum.
+ */
+export function getSessionChannelId(userId) {
+  const session = presenceSessions.get(userId);
+  return session ? session.channelId : null;
+}
+
+/**
  * Salva todos os dados parciais de presença no banco (failsafe).
  * Útil para salvar periodicamente e proteger contra crashes.
  * NÃO remove as sessões — apenas persiste o acumulado até agora.
