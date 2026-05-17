@@ -38,15 +38,45 @@ export function getLevelData(presenceTime, speakingTime) {
     ? Math.min(100, Math.floor((xpInCurrentLevel / xpNeededForNextLevel) * 100))
     : 100;
 
-  // Patentes / Ranks criativos baseados no som
-  let rank = "🤫 Silencioso";
-  if (level >= 100) rank = "🌌 Lenda do Som";
-  else if (level >= 75) rank = "👑 Mestre da Voz";
-  else if (level >= 50) rank = "📢 Orador Magnífico";
-  else if (level >= 35) rank = "🎙️ Locutor de Elite";
-  else if (level >= 20) rank = "🔊 Tagarela Ativo";
-  else if (level >= 10) rank = "🗣️ Conversador";
-  else if (level >= 5) rank = "👂 Ouvinte Ativo";
+  // Razão de fala (Tempo de fala / Tempo de presença)
+  const ratio = totalPresence > 0 ? (totalSpeaking / totalPresence) : 0;
+
+  // Patentes / Ranks dinâmicos baseados no estilo de conversa (Ratio) + Nível
+  let rank = "";
+
+  if (ratio < 0.10) {
+    // 🎧 Caminho 1: O Ouvinte (Prefere escutar, silencioso ativo)
+    if (level >= 100) rank = "🌌 Consciência Cósmica";
+    else if (level >= 75) rank = "👑 Imperador do Vácuo";
+    else if (level >= 50) rank = "🔮 Mente Telepática";
+    else if (level >= 35) rank = "🧠 Sábio Ouvinte";
+    else if (level >= 20) rank = "🛡️ Guardião do Silêncio";
+    else if (level >= 10) rank = "👤 Espectador de Elite";
+    else if (level >= 5) rank = "👂 Ouvinte Atento";
+    else rank = "🤫 Monge Silencioso";
+  } 
+  else if (ratio < 0.30) {
+    // 🗣️ Caminho 2: O Conversador (Moderado, equilíbrio perfeito)
+    if (level >= 100) rank = "🌌 Lenda do Som";
+    else if (level >= 75) rank = "👑 Mestre da Voz";
+    else if (level >= 50) rank = "🎓 Diplomata do Chat";
+    else if (level >= 35) rank = "📣 Porta-Voz do Servidor";
+    else if (level >= 20) rank = "📢 Debatedor Ativo";
+    else if (level >= 10) rank = "🎙️ Podcaster";
+    else if (level >= 5) rank = "🗣️ Conversador";
+    else rank = "💬 Sussurrador";
+  } 
+  else {
+    // 🎤 Caminho 3: O Palestrante / Tagarela (Voz ativa do servidor, fala muito)
+    if (level >= 100) rank = "🌌 Deus do Som";
+    else if (level >= 75) rank = "👑 Soberano do Áudio";
+    else if (level >= 50) rank = "🗣️ Filósofo do Mic";
+    else if (level >= 35) rank = "🔥 Incendiário do Microfone";
+    else if (level >= 20) rank = "⚡ Orador Elétrico";
+    else if (level >= 10) rank = "🎙️ Locutor";
+    else if (level >= 5) rank = "📢 Tagarela";
+    else rank = "🎤 Cantor de Chuveiro";
+  }
 
   return {
     xp,
@@ -55,6 +85,7 @@ export function getLevelData(presenceTime, speakingTime) {
     xpNeededForNextLevel,
     progressPercent,
     rank,
+    ratio,
   };
 }
 
