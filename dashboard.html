@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Discord Voice Metrics — Dashboard Premium</title>
+  <!-- Google Fonts: Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <!-- Tailwind CSS CDN for swift prototyping -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- ApexCharts CDN for stunning charts -->
+  <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+  <!-- Supabase CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Outfit', 'sans-serif'],
+          },
+          colors: {
+            darkbg: '#080b11',
+            panelbg: 'rgba(15, 22, 36, 0.7)',
+            accent: {
+              purple: '#8b5cf6',
+              blue: '#3b82f6',
+              pink: '#ec4899',
+              green: '#10b981'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      background-color: #080b11;
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(139, 92, 246, 0.15) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(59, 130, 246, 0.15) 0px, transparent 50%);
+      background-attachment: fixed;
+    }
+    .glass-panel {
+      background: rgba(13, 20, 35, 0.7);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .text-glow {
+      text-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
+    }
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(8, 11, 17, 0.5);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(139, 92, 246, 0.3);
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(139, 92, 246, 0.5);
+    }
+  </style>
+</head>
+<body class="text-slate-200 min-h-screen flex flex-col">
+
+  <!-- ==================== HEADER ==================== -->
+  <header class="glass-panel sticky top-0 z-50 px-6 py-4 flex flex-wrap items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-accent-purple to-accent-blue flex items-center justify-center shadow-lg shadow-purple-500/20">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+        </svg>
+      </div>
+      <div>
+        <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+          Discord Voice Metrics <span class="text-xs bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full border border-purple-500/30">Analytics Portal</span>
+        </h1>
+        <p class="text-xs text-slate-400">Análises avançadas de atividade e comportamento de voz</p>
+      </div>
+    </div>
+
+    <!-- Credentials toggle / Status -->
+    <div class="flex items-center gap-3">
+      <div id="connectionStatus" class="flex items-center gap-2 text-xs bg-red-500/10 text-red-400 px-3 py-1.5 rounded-lg border border-red-500/20">
+        <span class="h-2 w-2 rounded-full bg-red-500 animate-pulse"></span> Desconectado
+      </div>
+      <button onclick="toggleConfigModal()" class="px-4 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 transition flex items-center gap-1.5">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+        Configurar Supabase
+      </button>
+    </div>
+  </header>
+
+  <!-- ==================== MAIN CONTENT ==================== -->
+  <main class="flex-grow p-6 max-w-7xl w-full mx-auto flex flex-col gap-6">
+
+    <!-- Config Alert if not configured -->
+    <div id="configAlert" class="glass-panel border-amber-500/20 bg-amber-500/5 p-5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div class="flex items-start gap-3">
+        <div class="p-2 rounded-lg bg-amber-500/10 text-amber-400">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        </div>
+        <div>
+          <h3 class="font-bold text-amber-300">Conexão Pendente</h3>
+          <p class="text-xs text-slate-400">Insira suas credenciais do Supabase para que possamos puxar os dados do banco.</p>
+        </div>
+      </div>
+      <button onclick="toggleConfigModal()" class="px-5 py-2 rounded-xl bg-amber-500 text-slate-900 font-bold hover:bg-amber-400 transition text-sm self-start md:self-auto">
+        Configurar Agora
+      </button>
+    </div>
+
+    <!-- MAIN DASHBOARD PANELS (Hidden initially, shown after connection) -->
+    <div id="dashboardContent" class="hidden flex flex-col gap-6">
+      
+      <!-- ─── CARDS DE VISÃO GERAL ─── -->
+      <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- Card 1 -->
+        <div class="glass-panel p-5 rounded-2xl flex items-center justify-between">
+          <div>
+            <span class="text-xs text-slate-400 font-semibold">Total de Membros Mapeados</span>
+            <h2 id="cardTotalMembers" class="text-3xl font-bold text-white mt-1">0</h2>
+          </div>
+          <div class="p-3 bg-accent-purple/10 text-accent-purple rounded-xl border border-accent-purple/20">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+          </div>
+        </div>
+        <!-- Card 2 -->
+        <div class="glass-panel p-5 rounded-2xl flex items-center justify-between">
+          <div>
+            <span class="text-xs text-slate-400 font-semibold">Total de Horas em Voz</span>
+            <h2 id="cardTotalPresence" class="text-3xl font-bold text-accent-blue mt-1">0h</h2>
+          </div>
+          <div class="p-3 bg-accent-blue/10 text-accent-blue rounded-xl border border-accent-blue/20">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+        </div>
+        <!-- Card 3 -->
+        <div class="glass-panel p-5 rounded-2xl flex items-center justify-between">
+          <div>
+            <span class="text-xs text-slate-400 font-semibold">Horas de Fala Real</span>
+            <h2 id="cardTotalSpeaking" class="text-3xl font-bold text-accent-pink mt-1">0h</h2>
+          </div>
+          <div class="p-3 bg-accent-pink/10 text-accent-pink rounded-xl border border-accent-pink/20">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+            </svg>
+          </div>
+        </div>
+        <!-- Card 4 -->
+        <div class="glass-panel p-5 rounded-2xl flex items-center justify-between">
+          <div>
+            <span class="text-xs text-slate-400 font-semibold">Sessões Gravadas</span>
+            <h2 id="cardTotalSessions" class="text-3xl font-bold text-accent-green mt-1">0</h2>
+          </div>
+          <div class="p-3 bg-accent-green/10 text-accent-green rounded-xl border border-accent-green/20">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── SEÇÃO DE ABAS DE ANÁLISE ─── -->
+      <div class="flex border-b border-slate-800 gap-1 overflow-x-auto">
+        <button onclick="switchTab('tabOverview')" id="btnTabOverview" class="tab-btn px-5 py-3 text-sm font-semibold border-b-2 border-accent-purple text-accent-purple transition">
+          Visão Geral & Rankings
+        </button>
+        <button onclick="switchTab('tabHeatmap')" id="btnTabHeatmap" class="tab-btn px-5 py-3 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition">
+          Horários de Pico (Heatmap)
+        </button>
+        <button onclick="switchTab('tabProfiles')" id="btnTabProfiles" class="tab-btn px-5 py-3 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition">
+          Perfis de Engajamento
+        </button>
+        <button onclick="switchTab('tabHistory')" id="btnTabHistory" class="tab-btn px-5 py-3 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition">
+          Evolução Histórica
+        </button>
+      </div>
+
+      <!-- ─── ABA 1: VISÃO GERAL & LEADERBOARDS ─── -->
+      <div id="tabOverview" class="tab-content grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Gráfico do Top 10 Falantes -->
+        <div class="glass-panel p-6 rounded-3xl lg:col-span-2 flex flex-col justify-between">
+          <div>
+            <h3 class="text-lg font-bold text-white mb-1">Top 10 — Tempo de Fala Real</h3>
+            <p class="text-xs text-slate-400 mb-6">Visualização comparativa de tempo ativo de fala real</p>
+          </div>
+          <div id="topSpeakersChart" class="w-full"></div>
+        </div>
+        <!-- Leaderboard Tabela -->
+        <div class="glass-panel p-6 rounded-3xl flex flex-col justify-between">
+          <div>
+            <h3 class="text-lg font-bold text-white mb-1">Ranking de Engajamento</h3>
+            <p class="text-xs text-slate-400 mb-4">Eficiência de conversação (Tempo Falado / Tempo Presente)</p>
+          </div>
+          <div class="overflow-y-auto max-h-[350px] flex-grow pr-1">
+            <table class="w-full text-xs text-left">
+              <thead>
+                <tr class="text-slate-500 border-b border-slate-800">
+                  <th class="pb-2">Membro</th>
+                  <th class="pb-2 text-right">Presença</th>
+                  <th class="pb-2 text-right">Fala</th>
+                  <th class="pb-2 text-right">Ratio</th>
+                </tr>
+              </thead>
+              <tbody id="leaderboardBody">
+                <!-- Dinâmico -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── ABA 2: MAPA DE CALOR (HEATMAP) ─── -->
+      <div id="tabHeatmap" class="tab-content hidden glass-panel p-6 rounded-3xl flex flex-col justify-between">
+        <div>
+          <h3 class="text-lg font-bold text-white mb-1">Mapa de Calor — Horários de Pico</h3>
+          <p class="text-xs text-slate-400 mb-6">Indica os momentos de maior atividade (tempo acumulado de presença) no servidor por dia e hora</p>
+        </div>
+        <div id="heatmapChart" class="w-full"></div>
+      </div>
+
+      <!-- ─── ABA 3: PERFIS (SCATTER PLOT) ─── -->
+      <div id="tabProfiles" class="tab-content hidden grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Gráfico Dispersão -->
+        <div class="glass-panel p-6 rounded-3xl lg:col-span-2 flex flex-col justify-between">
+          <div>
+            <h3 class="text-lg font-bold text-white mb-1">Gráfico de Quadrantes de Engajamento</h3>
+            <p class="text-xs text-slate-400 mb-6">Mapeamento de perfil individual baseado em tempo em voz vs. fala real</p>
+          </div>
+          <div id="scatterChart" class="w-full"></div>
+        </div>
+        <!-- Explicação dos Quadrantes -->
+        <div class="glass-panel p-6 rounded-3xl flex flex-col gap-5 justify-center">
+          <h3 class="text-lg font-bold text-white border-b border-slate-800 pb-2">💡 Guia dos Perfis</h3>
+          
+          <div class="flex gap-3">
+            <div class="h-6 w-6 rounded bg-accent-pink/20 border border-accent-pink flex items-center justify-center text-xs font-bold text-accent-pink">I</div>
+            <div>
+              <h4 class="text-xs font-bold text-white">Tagarelas (Esquerda Superior)</h4>
+              <p class="text-[11px] text-slate-400">Entram, falam a maior parte do tempo de forma objetiva/rápida, e saem logo.</p>
+            </div>
+          </div>
+          <div class="flex gap-3">
+            <div class="h-6 w-6 rounded bg-accent-purple/20 border border-accent-purple flex items-center justify-center text-xs font-bold text-accent-purple">II</div>
+            <div>
+              <h4 class="text-xs font-bold text-white">Líderes de Voz (Direita Superior)</h4>
+              <p class="text-[11px] text-slate-400">Alto tempo de presença e alto tempo de fala. Conduzem e agitam as conversas do servidor.</p>
+            </div>
+          </div>
+          <div class="flex gap-3">
+            <div class="h-6 w-6 rounded bg-accent-blue/20 border border-accent-blue flex items-center justify-center text-xs font-bold text-accent-blue">III</div>
+            <div>
+              <h4 class="text-xs font-bold text-white">Ouvintes / Lurkers (Direita Inferior)</h4>
+              <p class="text-[11px] text-slate-400">Ficam muito tempo em voz, mas falam muito pouco. Geralmente acompanham ou escutam música.</p>
+            </div>
+          </div>
+          <div class="flex gap-3">
+            <div class="h-6 w-6 rounded bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-slate-400">IV</div>
+            <div>
+              <h4 class="text-xs font-bold text-white">Casuais (Esquerda Inferior)</h4>
+              <p class="text-[11px] text-slate-400">Pouca presença e pouca fala. Entram de forma esporádica e rápida.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── ABA 4: HISTÓRICO ─── -->
+      <div id="tabHistory" class="tab-content hidden glass-panel p-6 rounded-3xl flex flex-col justify-between">
+        <div>
+          <h3 class="text-lg font-bold text-white mb-1">Evolução do Engajamento Temporal</h3>
+          <p class="text-xs text-slate-400 mb-6">Mapeamento de horas ativas acumuladas no servidor nos últimos 30 dias</p>
+        </div>
+        <div id="historyChart" class="w-full"></div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- ==================== CONFIGURATION MODAL ==================== -->
+  <div id="configModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-darkbg/80 backdrop-filter backdrop-blur-md">
+    <div class="glass-panel w-full max-w-lg p-6 rounded-3xl shadow-2xl relative">
+      <button onclick="toggleConfigModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white transition">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+
+      <h3 class="text-xl font-bold text-white mb-1 flex items-center gap-2">
+        ⚙️ Configurar Supabase
+      </h3>
+      <p class="text-xs text-slate-400 mb-6">Estas informações são salvas localmente no seu navegador e não são transmitidas a terceiros.</p>
+
+      <div class="flex flex-col gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">SUPABASE_URL</label>
+          <input type="text" id="inputUrl" placeholder="https://xxxx.supabase.co" class="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs placeholder-slate-600 focus:outline-none focus:border-accent-purple transition">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">SUPABASE_KEY (Anon/Public ou Service Role)</label>
+          <input type="password" id="inputKey" placeholder="eyJhbGciOi..." class="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs placeholder-slate-600 focus:outline-none focus:border-accent-purple transition">
+        </div>
+
+        <div id="modalError" class="hidden text-xs text-red-400 bg-red-500/10 p-3 rounded-xl border border-red-500/20">
+          <!-- Dinâmico -->
+        </div>
+
+        <button onclick="saveConfig()" class="w-full py-3 rounded-xl bg-gradient-to-r from-accent-purple to-accent-blue text-white font-bold hover:shadow-lg hover:shadow-purple-500/25 transition mt-2 text-xs">
+          Salvar e Conectar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== FOOTER ==================== -->
+  <footer class="mt-auto border-t border-slate-900 py-6 px-6 text-center text-xs text-slate-600">
+    <p>Painel Analítico de Voz &copy; 2026. Desenvolvido para rastreamento de métricas em tempo real no Discord.</p>
+  </footer>
+
+  <!-- ==================== SCRIPT PRINCIPAL ==================== -->
+  <script>
+    let supabaseClient = null;
+    let cachedMetrics = [];
+    let cachedSessions = [];
+
+    // Map para gráficos
+    let charts = {};
+
+    window.onload = function() {
+      // Carrega credenciais do localStorage
+      const url = localStorage.getItem('supabase_metrics_url');
+      const key = localStorage.getItem('supabase_metrics_key');
+
+      if (url && key) {
+        document.getElementById('inputUrl').value = url;
+        document.getElementById('inputKey').value = key;
+        connectSupabase(url, key);
+      } else {
+        document.getElementById('configAlert').classList.remove('hidden');
+      }
+    }
+
+    function toggleConfigModal() {
+      const modal = document.getElementById('configModal');
+      modal.classList.toggle('hidden');
+    }
+
+    async function connectSupabase(url, key) {
+      try {
+        document.getElementById('connectionStatus').innerHTML = `<span class="h-2 w-2 rounded-full bg-amber-500 animate-pulse"></span> Conectando...`;
+        document.getElementById('connectionStatus').className = "flex items-center gap-2 text-xs bg-amber-500/10 text-amber-400 px-3 py-1.5 rounded-lg border border-amber-500/20";
+        
+        // Inicializa o cliente do Supabase
+        supabaseClient = supabase.createClient(url, key);
+        
+        // Executa uma query de teste simples
+        const { data, error } = await supabaseClient.from('voice_metrics').select('count', { count: 'exact', head: true });
+        
+        if (error) throw error;
+
+        // Conexão bem sucedida!
+        document.getElementById('connectionStatus').innerHTML = `<span class="h-2 w-2 rounded-full bg-accent-green animate-pulse"></span> Conectado`;
+        document.getElementById('connectionStatus').className = "flex items-center gap-2 text-xs bg-accent-green/10 text-accent-green px-3 py-1.5 rounded-lg border border-accent-green/20";
+        document.getElementById('configAlert').classList.add('hidden');
+        document.getElementById('dashboardContent').classList.remove('hidden');
+        
+        // Salva localmente
+        localStorage.setItem('supabase_metrics_url', url);
+        localStorage.setItem('supabase_metrics_key', key);
+
+        // Oculta modal se estiver aberto
+        document.getElementById('configModal').classList.add('hidden');
+        document.getElementById('modalError').classList.add('hidden');
+
+        // Carrega dados do dashboard
+        await loadDashboardData();
+
+      } catch (err) {
+        console.error(err);
+        document.getElementById('connectionStatus').innerHTML = `<span class="h-2 w-2 rounded-full bg-red-500 animate-pulse"></span> Erro de Conexão`;
+        document.getElementById('connectionStatus').className = "flex items-center gap-2 text-xs bg-red-500/10 text-red-400 px-3 py-1.5 rounded-lg border border-red-500/20";
+        document.getElementById('configAlert').classList.remove('hidden');
+        document.getElementById('dashboardContent').classList.add('hidden');
+
+        const errorDiv = document.getElementById('modalError');
+        errorDiv.innerText = `Erro de conexão: ${err.message || 'Verifique as credenciais e tabelas RLS.'}`;
+        errorDiv.classList.remove('hidden');
+        toggleConfigModal();
+      }
+    }
+
+    function saveConfig() {
+      const url = document.getElementById('inputUrl').value.trim();
+      const key = document.getElementById('inputKey').value.trim();
+
+      if (!url || !key) {
+        alert('Por favor preencha os dois campos.');
+        return;
+      }
+      connectSupabase(url, key);
+    }
+
+    async function loadDashboardData() {
+      if (!supabaseClient) return;
+
+      // 1. Puxa métricas agregadas dos usuários
+      const { data: metrics, error: metricsErr } = await supabaseClient
+        .from('voice_metrics')
+        .select('*');
+
+      // 2. Puxa histórico de sessões
+      const { data: sessions, error: sessionsErr } = await supabaseClient
+        .from('voice_sessions')
+        .select('*')
+        .order('joined_at', { ascending: true });
+
+      if (metricsErr) console.error("Erro ao ler voice_metrics:", metricsErr.message);
+      if (sessionsErr) console.error("Erro ao ler voice_sessions:", sessionsErr.message);
+
+      cachedMetrics = metrics || [];
+      cachedSessions = sessions || [];
+
+      // Atualiza os Cards Superiores
+      updateOverviewCards();
+
+      // Renderiza os Gráficos
+      renderTopSpeakersChart();
+      renderLeaderboardTable();
+      renderHeatmapChart();
+      renderScatterChart();
+      renderHistoryChart();
+    }
+
+    function updateOverviewCards() {
+      // Total Membros
+      document.getElementById('cardTotalMembers').innerText = cachedMetrics.length;
+
+      // Total Presença (Soma)
+      const totalPresSeconds = cachedMetrics.reduce((sum, item) => sum + (item.total_presence_time || 0), 0);
+      const totalPresHours = (totalPresSeconds / 3600).toFixed(1);
+      document.getElementById('cardTotalPresence').innerText = `${totalPresHours}h`;
+
+      // Total Fala (Soma)
+      const totalSpeakSeconds = cachedMetrics.reduce((sum, item) => sum + (item.total_speaking_time || 0), 0);
+      const totalSpeakHours = (totalSpeakSeconds / 3600).toFixed(1);
+      document.getElementById('cardTotalSpeaking').innerText = `${totalSpeakHours}h`;
+
+      // Total Sessões
+      document.getElementById('cardTotalSessions').innerText = cachedSessions.length;
+    }
+
+    // ==================== RENDERING CHARTS ====================
+
+    function switchTab(tabId) {
+      // Esconde todos
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.tab-btn').forEach(el => {
+        el.classList.remove('border-accent-purple', 'text-accent-purple');
+        el.classList.add('border-transparent', 'text-slate-400');
+      });
+
+      // Mostra o ativo
+      document.getElementById(tabId).classList.remove('hidden');
+      
+      const btnId = 'btn' + tabId.charAt(0).toUpperCase() + tabId.slice(1);
+      const activeBtn = document.getElementById(btnId);
+      activeBtn.classList.remove('border-transparent', 'text-slate-400');
+      activeBtn.classList.add('border-accent-purple', 'text-accent-purple');
+
+      // Redefine o tamanho dos gráficos da aba (necessário para ApexCharts carregar direito na div mostrada)
+      window.dispatchEvent(new Event('resize'));
+    }
+
+    // ─── ABA 1: TOP SPEAKERS & LEADERBOARD ───
+    function renderTopSpeakersChart() {
+      // Ordena por fala
+      const sorted = [...cachedMetrics]
+        .sort((a, b) => b.total_speaking_time - a.total_speaking_time)
+        .slice(0, 10);
+
+      const categories = sorted.map(item => item.username || item.user_id.substring(0, 8));
+      const speakingData = sorted.map(item => Math.round(item.total_speaking_time / 60)); // minutos
+      const presenceData = sorted.map(item => Math.round(item.total_presence_time / 60)); // minutos
+
+      const options = {
+        series: [
+          { name: 'Fala Real (Minutos)', data: speakingData, color: '#ec4899' },
+          { name: 'Presença em Canal (Minutos)', data: presenceData, color: '#3b82f6' }
+        ],
+        chart: {
+          type: 'bar',
+          height: 380,
+          background: 'transparent',
+          toolbar: { show: false }
+        },
+        theme: { mode: 'dark' },
+        plotOptions: {
+          bar: {
+            horizontal: true,
+            borderRadius: 6,
+            dataLabels: { position: 'top' }
+          }
+        },
+        dataLabels: {
+          enabled: true,
+          offsetX: -6,
+          style: { fontSize: '10px', colors: ['#fff'] }
+        },
+        stroke: { show: true, width: 1, colors: ['#fff'] },
+        xaxis: { categories: categories },
+        tooltip: {
+          y: { formatter: val => `${val} min` }
+        },
+        legend: { position: 'top' }
+      };
+
+      if (charts.topSpeakers) charts.topSpeakers.destroy();
+      charts.topSpeakers = new ApexCharts(document.querySelector("#topSpeakersChart"), options);
+      charts.topSpeakers.render();
+    }
+
+    function renderLeaderboardTable() {
+      const tbody = document.getElementById('leaderboardBody');
+      tbody.innerHTML = '';
+
+      // Ordena por maior ratio de fala/presença (apenas membros que falaram pelo menos 1 minuto)
+      const ranked = [...cachedMetrics]
+        .filter(item => item.total_presence_time > 0)
+        .map(item => {
+          const ratio = item.total_presence_time > 0 
+            ? ((item.total_speaking_time / item.total_presence_time) * 100)
+            : 0;
+          return { ...item, ratio };
+        })
+        .sort((a, b) => b.ratio - a.ratio);
+
+      if (ranked.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-slate-500">Nenhum dado registrado para calcular ratios.</td></tr>`;
+        return;
+      }
+
+      ranked.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.className = "border-b border-slate-900 hover:bg-slate-900/30 transition";
+
+        const presFormatted = formatDuration(item.total_presence_time);
+        const speakFormatted = formatDuration(item.total_speaking_time);
+        
+        tr.innerHTML = `
+          <td class="py-3 font-semibold text-white">${item.username || item.user_id.substring(0, 8)}</td>
+          <td class="py-3 text-right text-slate-300 font-mono">${presFormatted}</td>
+          <td class="py-3 text-right text-accent-pink font-mono">${speakFormatted}</td>
+          <td class="py-3 text-right font-bold text-accent-purple font-mono">${item.ratio.toFixed(1)}%</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // ─── ABA 2: MAPA DE CALOR (HEATMAP) ───
+    function renderHeatmapChart() {
+      // Dias da semana e Horas
+      const days = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+      const hours = Array.from({ length: 24 }, (_, i) => `${i}h`);
+
+      // Inicializa matriz 7x24 zerada
+      let dataMatrix = Array.from({ length: 7 }, () => Array(24).fill(0));
+
+      cachedSessions.forEach(session => {
+        if (!session.joined_at) return;
+        const date = new Date(session.joined_at);
+        const day = date.getDay();
+        const hour = date.getHours();
+        
+        // Acumula tempo de presença em horas
+        dataMatrix[day][hour] += (session.presence_seconds || 0) / 3600;
+      });
+
+      // Formata dados para ApexCharts Heatmap
+      let series = [];
+      for (let dayIndex = 6; dayIndex >= 0; dayIndex--) { // Inverte para domingo ficar embaixo no eixo Y
+        let dayData = [];
+        for (let hourIndex = 0; hourIndex < 24; hourIndex++) {
+          dayData.push({
+            x: hours[hourIndex],
+            y: parseFloat(dataMatrix[dayIndex][hourIndex].toFixed(2)) // arredonda a 2 casas
+          });
+        }
+        series.push({
+          name: days[dayIndex],
+          data: dayData
+        });
+      }
+
+      const options = {
+        series: series,
+        chart: {
+          height: 380,
+          type: 'heatmap',
+          background: 'transparent',
+          toolbar: { show: false }
+        },
+        theme: { mode: 'dark' },
+        dataLabels: { enabled: false },
+        colors: ["#3b82f6"], // Cor base do gradiente (azul)
+        plotOptions: {
+          heatmap: {
+            colorScale: {
+              ranges: [
+                { from: 0, to: 0.01, name: 'Sem ativ.', color: '#0f172a' },
+                { from: 0.01, to: 0.5, name: 'Baixo (Até 30m)', color: '#1e3a8a' },
+                { from: 0.5, to: 2.0, name: 'Médio (Até 2h)', color: '#3b82f6' },
+                { from: 2.0, to: 5.0, name: 'Alto (Até 5h)', color: '#8b5cf6' },
+                { from: 5.0, to: 1000.0, name: 'Pico (5h+)', color: '#ec4899' }
+              ]
+            }
+          }
+        },
+        xaxis: {
+          title: { text: 'Hora do Dia' }
+        },
+        yaxis: {
+          labels: { style: { colors: '#94a3b8' } }
+        },
+        tooltip: {
+          y: { formatter: val => `${val.toFixed(2)} horas de presença acumulada` }
+        }
+      };
+
+      if (charts.heatmap) charts.heatmap.destroy();
+      charts.heatmap = new ApexCharts(document.querySelector("#heatmapChart"), options);
+      charts.heatmap.render();
+    }
+
+    // ─── ABA 3: PERFIS (SCATTER PLOT) ───
+    function renderScatterChart() {
+      // Mapeia usuários para pontos (X: Presença em Minutos, Y: Fala em Minutos)
+      const dataPoints = cachedMetrics.map(item => {
+        return {
+          x: Math.round(item.total_presence_time / 60), // minutos
+          y: Math.round(item.total_speaking_time / 60), // minutos
+          name: item.username || item.user_id.substring(0, 8)
+        };
+      });
+
+      const options = {
+        series: [{
+          name: 'Membros',
+          data: dataPoints.map(p => [p.x, p.y])
+        }],
+        chart: {
+          height: 380,
+          type: 'scatter',
+          background: 'transparent',
+          zoom: { enabled: true, type: 'xy' },
+          toolbar: { show: false }
+        },
+        theme: { mode: 'dark' },
+        xaxis: {
+          tickAmount: 10,
+          title: { text: 'Tempo em Canal de Voz (Minutos)' }
+        },
+        yaxis: {
+          title: { text: 'Tempo de Fala Real (Minutos)' }
+        },
+        colors: ['#8b5cf6'],
+        markers: {
+          size: 10,
+          strokeWidth: 2,
+          strokeColors: '#ffffff',
+          hover: { size: 12 }
+        },
+        tooltip: {
+          custom: function({series, seriesIndex, dataPointIndex, w}) {
+            const pt = dataPoints[dataPointIndex];
+            const ratio = pt.x > 0 ? ((pt.y / pt.x) * 100).toFixed(1) : '0';
+            return `<div class="p-3 bg-slate-900 border border-slate-800 text-slate-200 text-xs rounded-xl shadow-xl">
+              <div class="font-bold text-white mb-1">🎙️ ${pt.name}</div>
+              <div>🕒 Voz: <span class="font-mono font-bold">${pt.x} min</span></div>
+              <div>🗣️ Fala: <span class="font-mono font-bold text-accent-pink">${pt.y} min</span></div>
+              <div>📊 Eficiência: <span class="font-mono font-bold text-accent-purple">${ratio}%</span></div>
+            </div>`;
+          }
+        }
+      };
+
+      if (charts.scatter) charts.scatter.destroy();
+      charts.scatter = new ApexCharts(document.querySelector("#scatterChart"), options);
+      charts.scatter.render();
+    }
+
+    // ─── ABA 4: HISTÓRICO (LINE CHART) ───
+    function renderHistoryChart() {
+      // Agrupa sessões por dia nos últimos 30 dias
+      let dailyData = {};
+      
+      // Cria últimas 30 datas vazias
+      for (let i = 29; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const dateStr = d.toISOString().split('T')[0];
+        dailyData[dateStr] = { presence: 0, speaking: 0 };
+      }
+
+      cachedSessions.forEach(session => {
+        if (!session.joined_at) return;
+        const dateStr = session.joined_at.split('T')[0];
+        if (dailyData[dateStr]) {
+          dailyData[dateStr].presence += (session.presence_seconds || 0) / 3600; // converter para horas
+          dailyData[dateStr].speaking += (session.speaking_seconds || 0) / 3600; // converter para horas
+        }
+      });
+
+      const dates = Object.keys(dailyData);
+      // Formata as datas no formato DD/MM para o gráfico
+      const formattedDates = dates.map(d => {
+        const parts = d.split('-');
+        return `${parts[2]}/${parts[1]}`;
+      });
+
+      const presenceHours = dates.map(d => parseFloat(dailyData[d].presence.toFixed(2)));
+      const speakingHours = dates.map(d => parseFloat(dailyData[d].speaking.toFixed(2)));
+
+      const options = {
+        series: [
+          { name: 'Total de Presença (Horas)', data: presenceHours, color: '#3b82f6' },
+          { name: 'Total de Fala Real (Horas)', data: speakingHours, color: '#ec4899' }
+        ],
+        chart: {
+          height: 380,
+          type: 'line',
+          background: 'transparent',
+          toolbar: { show: false }
+        },
+        theme: { mode: 'dark' },
+        stroke: { curve: 'smooth', width: 3 },
+        dataLabels: { enabled: false },
+        xaxis: { categories: formattedDates },
+        yaxis: {
+          title: { text: 'Horas Totais Acumuladas' },
+          labels: { formatter: val => `${val.toFixed(1)}h` }
+        },
+        tooltip: {
+          y: { formatter: val => `${val.toFixed(2)}h` }
+        },
+        legend: { position: 'top' }
+      };
+
+      if (charts.history) charts.history.destroy();
+      charts.history = new ApexCharts(document.querySelector("#historyChart"), options);
+      charts.history.render();
+    }
+
+    // ==================== UTILS ====================
+
+    function formatDuration(seconds) {
+      if (!seconds) return '0s';
+      const hrs = Math.floor(seconds / 3600);
+      const mins = Math.floor((seconds % 3600) / 60);
+      const secs = Math.floor(seconds % 60);
+
+      let str = '';
+      if (hrs > 0) str += `${hrs}h `;
+      if (mins > 0 || hrs > 0) str += `${mins}m `;
+      str += `${secs}s`;
+      return str;
+    }
+  </script>
+</body>
+</html>
