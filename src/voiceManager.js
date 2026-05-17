@@ -25,7 +25,7 @@ const activeConnections = new Map();
  * @param {Client} client - Instância do client Discord
  */
 export async function joinChannel(channel, client) {
-  // Evita reconexão se já está no canal
+  // Evita reconexão se já está no canal ou em processo de conexão
   if (activeConnections.has(channel.id)) return;
 
   try {
@@ -37,13 +37,19 @@ export async function joinChannel(channel, client) {
       selfMute: true,   // Bot fica mutado — não emite som
     });
 
-    // Aguarda a conexão estar pronta (timeout de 30s)
-    await entersState(connection, VoiceConnectionStatus.Ready, 30_000);
-
+    // Registra imediatamente no Map para evitar chamadas concorrentes de outros eventos simultâneos
     activeConnections.set(channel.id, {
       connection,
       guildId: channel.guild.id,
+      ready: false,
     });
+
+    // Aguarda a conexão estar pronta (timeout de 30s)
+    await entersState(connection, VoiceConnectionStatus.Ready, 30_000);
+
+    // Marca como pronto
+    const entry = activeConnections.get(channel.id);
+    if (entry) entry.ready = true;
 
     console.log(`🔊 [VOZ] Bot conectado ao canal: ${channel.name} (${channel.id})`);
 
