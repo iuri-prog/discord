@@ -59,6 +59,50 @@ export const LOOT_TABLE = [
       const hora = new Date().getHours();
       return hora === 0; // Dropa à Meia-noite (hora das bruxas)
     }
+  },
+  {
+    id: 'cafe',
+    icon: '☕',
+    name: 'Bom Dia, Vietnam!',
+    tag: '[Café]',
+    chance: 0.10,
+    condition: () => {
+      const hora = new Date().getHours();
+      return hora >= 6 && hora <= 9; // Drop matinal
+    }
+  },
+  {
+    id: 'orador',
+    icon: '🎙️',
+    name: 'O Grande Orador',
+    tag: '[Orador]',
+    chance: 0.20, // Alta chance, pois é difícil atingir
+    condition: (speakDurationSeconds) => {
+      return speakDurationSeconds >= 600; // Falou por mais de 10 minutos diretos!
+    }
+  },
+  {
+    id: 'velocista',
+    icon: '⚡',
+    name: 'Velocista Vocal',
+    tag: '[Velocista]',
+    chance: 0.05,
+    condition: (speakDurationSeconds) => {
+      return speakDurationSeconds >= 5 && speakDurationSeconds <= 8; // Falas muito rápidas, mas válidas
+    }
+  },
+  {
+    id: 'sabado',
+    icon: '🍻',
+    name: 'Inimigo do Fim',
+    tag: '[Inimigo]',
+    chance: 0.10,
+    condition: () => {
+      const day = new Date().getDay();
+      const hour = new Date().getHours();
+      // Dropa sexta à noite ou sábado à noite (após 22h)
+      return (day === 5 || day === 6) && (hour >= 22 || hour <= 3);
+    }
   }
 ];
 

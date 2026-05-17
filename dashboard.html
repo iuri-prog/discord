@@ -859,10 +859,14 @@
       for (const [key, weight] of edgesMap.entries()) {
         if (weight > 60) {
           const [from, to] = key.split(':');
+          
+          // Normalização do peso (log) para evitar que linhas fiquem gigantes e puxem os nós demais
+          const normalizedThickness = Math.max(1, Math.log10(weight)); 
+
           edges.push({
             from,
             to,
-            value: weight, // Define a espessura da linha
+            value: normalizedThickness, // Define a espessura da linha
             title: `Conexão: ${formatDuration(weight)} juntos`,
             color: { color: 'rgba(59, 130, 246, 0.4)', highlight: '#3b82f6' }
           });
@@ -872,16 +876,23 @@
       const container = document.getElementById('networkGraphContainer');
       const data = { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) };
       const options = {
-        nodes: { shape: 'dot', scaling: { min: 10, max: 40 } },
+        nodes: { shape: 'dot', scaling: { min: 10, max: 50 } },
         edges: { smooth: { type: 'continuous' } },
         physics: {
-          forceAtlas2Based: { gravitationalConstant: -50, centralGravity: 0.01, springLength: 100, springConstant: 0.08 },
+          barnesHut: { 
+            gravitationalConstant: -30000, 
+            centralGravity: 0.3, 
+            springLength: 250, 
+            springConstant: 0.04, 
+            damping: 0.09, 
+            avoidOverlap: 1 
+          },
           maxVelocity: 50,
-          solver: 'forceAtlas2Based',
-          timestep: 0.35,
-          stabilization: { iterations: 150 }
+          solver: 'barnesHut',
+          timestep: 0.5,
+          stabilization: { iterations: 200 }
         },
-        interaction: { hover: true, tooltipDelay: 200 }
+        interaction: { hover: true, tooltipDelay: 100 }
       };
 
       if (networkGraph) networkGraph.destroy();
