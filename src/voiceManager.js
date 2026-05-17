@@ -28,6 +28,19 @@ export async function joinChannel(channel, client) {
   // Evita reconexão se já está no canal ou em processo de conexão
   if (activeConnections.has(channel.id)) return;
 
+  // ===================================================
+  // ⚠️ LIMITAÇÃO CRUCIAL DA API DO DISCORD:
+  // Um bot só pode estar em UM canal de voz por servidor (guild) por vez.
+  // Se já houver alguma conexão ativa neste servidor, ignoramos para evitar
+  // que o bot fique pulando (ping-pong) infinitamente entre canais ativos.
+  // ===================================================
+  const isAlreadyConnectedInGuild = [...activeConnections.values()].some(
+    (conn) => conn.guildId === channel.guild.id
+  );
+  if (isAlreadyConnectedInGuild) {
+    return;
+  }
+
   try {
     const connection = joinVoiceChannel({
       channelId: channel.id,
@@ -152,19 +165,31 @@ export async function syncVoiceChannels(guild, client) {
     (ch) => ch.type === ChannelType.GuildVoice || ch.type === ChannelType.GuildStageVoice
   );
 
+  // 1. Desconecta de qualquer canal que esteja vazio
   for (const [channelId, channel] of voiceChannels) {
-    // Conta apenas membros humanos (exclui bots)
     const humanMembers = channel.members.filter((m) => !m.user.bot).size;
-
-    if (humanMembers > 0 && !activeConnections.has(channelId)) {
-      // Há usuários no canal, mas o bot não está lá — conecta
-      await joinChannel(channel, client);
-    } else if (humanMembers === 0 && activeConnections.has(channelId)) {
-      // Canal vazio e bot está lá — desconecta
+    if (humanMembers === 0 && activeConnections.has(channelId)) {
       await leaveChannel(channelId, guild.id);
     }
   }
+
+  // 2. Verifica se o bot já está conectado em algum outro canal do mesmo servidor
+  const isAlreadyConnected = [...activeConnections.values()].some(
+    (conn) => conn.guildId === guild.id
+  );
+
+  // 3. Se não estiver conectado em nenhum canal deste servidor, entra no primeiro canal ativo que encontrar
+  if (!isAlreadyConnected) {
+    const activeChannel = voiceChannels.find(
+      (ch) => ch.members.filter((m) => !m.user.bot).size > 0
+    );
+
+    if (activeChannel) {
+      await joinChannel(activeChannel, client);
+    }
+  }
 }
+
 
 /**
  * Desconecta de TODOS os canais (usado no shutdown).

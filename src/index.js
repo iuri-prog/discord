@@ -156,9 +156,13 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
       const humanMembers = oldState.channel.members.filter((m) => !m.user.bot).size;
       if (humanMembers === 0) {
         await leaveChannel(oldChannelId, oldState.guild.id);
+        
+        // Verifica se há outros canais ativos no servidor para entrar
+        await syncVoiceChannels(oldState.guild, client);
       }
     }
   }
+
 
   // ─── Caso 3: Usuário TROCOU de canal ─────────────
   else if (oldChannelId && newChannelId && oldChannelId !== newChannelId) {
@@ -178,9 +182,13 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
       const humanMembers = oldState.channel.members.filter((m) => !m.user.bot).size;
       if (humanMembers === 0) {
         await leaveChannel(oldChannelId, oldState.guild.id);
+        
+        // Verifica se há outros canais ativos no servidor para entrar
+        await syncVoiceChannels(oldState.guild, client);
       }
     }
   }
+
 
   // ─── Caso 4: Mesmo canal, mudança de estado (mute/deaf/etc) ─────
   // Não afeta presença — o usuário continua no canal.
