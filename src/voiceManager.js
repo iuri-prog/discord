@@ -47,7 +47,7 @@ export async function joinChannel(channel, client) {
       guildId: channel.guild.id,
       adapterCreator: channel.guild.voiceAdapterCreator,
       selfDeaf: false,  // Bot NÃO fica surdo — precisa ouvir para detectar fala
-      selfMute: true,   // Bot fica mutado — não emite som
+      selfMute: false,  // Bot não fica mutado para poder tocar efeitos sonoros (Loot Drops)
     });
 
     // Registra imediatamente no Map para evitar chamadas concorrentes de outros eventos simultâneos
