@@ -8,8 +8,10 @@ import { REST, Routes } from 'discord.js';
 import { config } from '../config.js';
 import { data as statusvoz } from './statusvoz.js';
 import { data as topfala } from './topfala.js';
+import { data as level } from './level.js';
+import { data as toplevel } from './toplevel.js';
 
-const commands = [statusvoz.toJSON(), topfala.toJSON()];
+const commands = [statusvoz.toJSON(), topfala.toJSON(), level.toJSON(), toplevel.toJSON()];
 
 const rest = new REST({ version: '10' }).setToken(config.token);
 

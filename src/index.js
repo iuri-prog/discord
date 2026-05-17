@@ -36,6 +36,8 @@ import {
 // Importa os comandos e script de deploy
 import * as statusvozCommand from './commands/statusvoz.js';
 import * as topfalaCommand from './commands/topfala.js';
+import * as levelCommand from './commands/level.js';
+import * as toplevelCommand from './commands/toplevel.js';
 import { deployCommands } from './commands/deploy.js';
 
 
@@ -56,6 +58,8 @@ const client = new Client({
 client.commands = new Collection();
 client.commands.set(statusvozCommand.data.name, statusvozCommand);
 client.commands.set(topfalaCommand.data.name, topfalaCommand);
+client.commands.set(levelCommand.data.name, levelCommand);
+client.commands.set(toplevelCommand.data.name, toplevelCommand);
 
 // ============================================
 // 3. Evento: Bot está pronto

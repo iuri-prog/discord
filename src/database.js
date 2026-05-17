@@ -203,4 +203,33 @@ export async function saveVoiceSession({
   }
 }
 
+/**
+ * Busca o Top N usuários ordenados por Nível/XP acumulado.
+ * @param {number} limit - Quantidade de resultados (padrão: 10)
+ * @returns {Array} Lista ordenada de usuários com dados de XP agregados
+ */
+export async function getTopLevels(limit = 10) {
+  const { data, error } = await supabase
+    .from('voice_metrics')
+    .select('*');
+
+  if (error) {
+    console.error('❌ Erro ao buscar top levels:', error.message);
+    return [];
+  }
+
+  // Mapeia e calcula o XP de cada um em memória
+  const calculated = (data || []).map(user => {
+    const presence = user.total_presence_time || 0;
+    const speaking = user.total_speaking_time || 0;
+    const xp = Math.floor((speaking * 3) + (presence * 1));
+    return { ...user, xp };
+  });
+
+  // Ordena por XP decrescente e limita ao valor solicitado
+  return calculated
+    .sort((a, b) => b.xp - a.xp)
+    .slice(0, limit);
+}
+
 export { supabase };
