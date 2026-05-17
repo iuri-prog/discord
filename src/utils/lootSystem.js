@@ -4,6 +4,10 @@
 
 import { awardBadge, getUserBadges } from '../database.js';
 
+// Cache em memória para garantir que não haja drops repetidos mesmo com delay/erro no Supabase
+const pendingAwards = new Set(); // Formato: 'userId:badgeName'
+
+
 /**
  * Tabela de Drops Dinâmicos (Loot).
  * 'chance' é o percentual base de chance por tentativa (0 a 1).
@@ -14,7 +18,7 @@ export const LOOT_TABLE = [
     id: 'coruja',
     icon: '🦉',
     name: 'Coruja da Madrugada',
-    tag: '[Coruja]',
+    tag: '[🦉Coruja]',
     chance: 0.15, // 15% de chance
     condition: () => {
       const hora = new Date().getHours();
@@ -25,7 +29,7 @@ export const LOOT_TABLE = [
     id: 'onfire',
     icon: '🔥',
     name: 'Máquina de Falar',
-    tag: '[On Fire]',
+    tag: '[🔥On Fire]',
     chance: 0.05, // 5% de chance
     condition: (speakDurationSeconds) => {
       return speakDurationSeconds > 300; // Falou por mais de 5 minutos direto
@@ -35,7 +39,7 @@ export const LOOT_TABLE = [
     id: 'tagarela',
     icon: '🗣️',
     name: 'Tagarela Inveterado',
-    tag: '[Tagarela]',
+    tag: '[🗣️Tagarela]',
     chance: 0.08, 
     condition: (speakDurationSeconds) => {
       return speakDurationSeconds > 120 && speakDurationSeconds <= 300; // Entre 2 e 5 mins diretos
@@ -45,7 +49,7 @@ export const LOOT_TABLE = [
     id: 'sortudo',
     icon: '🎲',
     name: 'Sortudo do Microfone',
-    tag: '[Sorte]',
+    tag: '[🎲Sorte]',
     chance: 0.01, // 1% de chance (muito raro)
     condition: () => true // Pode dropar a qualquer momento que a pessoa pare de falar
   },
@@ -53,7 +57,7 @@ export const LOOT_TABLE = [
     id: 'fantasma',
     icon: '👻',
     name: 'Fantasma Tagarela',
-    tag: '[Fantasma]',
+    tag: '[👻Fantasma]',
     chance: 0.03,
     condition: (speakDurationSeconds) => {
       const hora = new Date().getHours();
@@ -64,7 +68,7 @@ export const LOOT_TABLE = [
     id: 'cafe',
     icon: '☕',
     name: 'Bom Dia, Vietnam!',
-    tag: '[Café]',
+    tag: '[☕Café]',
     chance: 0.10,
     condition: () => {
       const hora = new Date().getHours();
@@ -75,7 +79,7 @@ export const LOOT_TABLE = [
     id: 'orador',
     icon: '🎙️',
     name: 'O Grande Orador',
-    tag: '[Orador]',
+    tag: '[🎙️Orador]',
     chance: 0.20, // Alta chance, pois é difícil atingir
     condition: (speakDurationSeconds) => {
       return speakDurationSeconds >= 600; // Falou por mais de 10 minutos diretos!
@@ -85,7 +89,7 @@ export const LOOT_TABLE = [
     id: 'velocista',
     icon: '⚡',
     name: 'Velocista Vocal',
-    tag: '[Velocista]',
+    tag: '[⚡Velocista]',
     chance: 0.05,
     condition: (speakDurationSeconds) => {
       return speakDurationSeconds >= 5 && speakDurationSeconds <= 8; // Falas muito rápidas, mas válidas
@@ -95,7 +99,7 @@ export const LOOT_TABLE = [
     id: 'sabado',
     icon: '🍻',
     name: 'Inimigo do Fim',
-    tag: '[Inimigo]',
+    tag: '[🍻Inimigo]',
     chance: 0.10,
     condition: () => {
       const day = new Date().getDay();
@@ -126,7 +130,8 @@ export async function evaluateLootDrop(client, guildId, channelId, userId, usern
   // Avaliar loots elegíveis
   const eligibleLoots = LOOT_TABLE.filter(loot => 
     loot.condition(speakDurationSeconds) && 
-    !earnedBadgeIds.includes(loot.name)
+    !earnedBadgeIds.includes(loot.name) &&
+    !pendingAwards.has(`${userId}:${loot.name}`) // Bloqueio imediato no cache
   );
 
   if (eligibleLoots.length === 0) return; // Não há loots possíveis ou já tem todos
@@ -139,6 +144,9 @@ export async function evaluateLootDrop(client, guildId, channelId, userId, usern
     if (roll <= loot.chance) {
       console.log(`🎁 [LOOT DROP] ${username} ganhou a conquista: ${loot.name}`);
       
+      // Trava no cache local IMEDIATAMENTE para garantir anti-duplicação absoluta
+      pendingAwards.add(`${userId}:${loot.name}`);
+
       // Salva no banco de dados
       await awardBadge(userId, username, loot.icon, loot.name, loot.tag);
 
@@ -186,6 +194,17 @@ async function announceLootDrop(client, guildId, channelId, userId, loot) {
         // Limite do Discord é 32 caracteres para nicknames
         const newName = `${loot.tag} ${currentName}`.substring(0, 32);
         await member.setNickname(newName, `Conquista desbloqueada: ${loot.name}`);
+
+        // Agenda a remoção da tag após 24 horas
+        setTimeout(() => {
+          member.guild.members.fetch(userId).then(m => {
+            if (m && m.manageable && m.displayName.includes(loot.tag)) {
+              // Limpa a tag do nome
+              const revertedName = m.displayName.replace(`${loot.tag} `, '').replace(loot.tag, '');
+              m.setNickname(revertedName.substring(0, 32), 'Expirou o tempo de 24h da tag de conquista');
+            }
+          }).catch(() => {});
+        }, 24 * 60 * 60 * 1000); // 24 horas em milissegundos
       }
     }
 
