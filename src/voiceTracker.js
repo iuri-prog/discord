@@ -4,11 +4,11 @@
 // Gerencia o rastreamento de quando os usuários entram/saem
 // de canais de voz, calculando o tempo total de presença.
 
-import { addPresenceTime } from './database.js';
+import { addPresenceTime, saveVoiceSession } from './database.js';
 
 /**
  * Map em memória para rastrear timestamps de entrada.
- * Chave: userId | Valor: { joinedAt: Date, username: string, channelId: string }
+ * Chave: userId | Valor: { originalJoinedAt: number, lastFlushedAt: number, username: string, channelId: string, speakingSeconds: number }
  */
 const presenceSessions = new Map();
 
@@ -24,36 +24,67 @@ export function startPresenceTracking(userId, username, channelId) {
     stopPresenceTracking(userId);
   }
 
+  const now = Date.now();
   presenceSessions.set(userId, {
-    joinedAt: Date.now(),
+    originalJoinedAt: now,
+    lastFlushedAt: now,
     username,
     channelId,
+    speakingSeconds: 0, // Acumulador de segundos falados nesta sessão
   });
 
   console.log(`📥 [PRESENÇA] ${username} entrou no canal de voz (${channelId})`);
 }
 
 /**
- * Finaliza o rastreamento de presença e salva no banco de dados.
+ * Finaliza o rastreamento de presença e salva no banco de dados (global e sessão).
  * @param {string} userId - ID do usuário
- * @returns {number} Tempo de presença em segundos (0 se não havia sessão)
+ * @returns {number} Tempo total de presença da sessão em segundos (0 se não havia sessão)
  */
 export async function stopPresenceTracking(userId) {
   const session = presenceSessions.get(userId);
   if (!session) return 0;
 
-  const elapsed = (Date.now() - session.joinedAt) / 1000; // converter ms → s
+  const now = Date.now();
+  const elapsedSinceLastFlush = (now - session.lastFlushedAt) / 1000;
+  const totalSessionPresence = (now - session.originalJoinedAt) / 1000;
+  
   presenceSessions.delete(userId);
 
-  // Salva no banco de dados
-  await addPresenceTime(userId, session.username, elapsed);
+  // 1. Salva a parte pendente (desde o último flush) nas métricas globais
+  if (elapsedSinceLastFlush > 0) {
+    await addPresenceTime(userId, session.username, elapsedSinceLastFlush);
+  }
+
+  // 2. Salva a sessão histórica completa no banco de dados (histórico)
+  await saveVoiceSession({
+    userId,
+    username: session.username,
+    channelId: session.channelId,
+    joinedAt: session.originalJoinedAt,
+    leftAt: now,
+    presenceSeconds: totalSessionPresence,
+    speakingSeconds: session.speakingSeconds || 0,
+  });
 
   console.log(
-    `📤 [PRESENÇA] ${session.username} saiu do canal de voz. ` +
-    `Tempo: ${Math.floor(elapsed)}s`
+    `📤 [PRESENÇA] ${session.username} saiu. ` +
+    `Presença total: ${Math.floor(totalSessionPresence)}s | Fala total: ${Math.floor(session.speakingSeconds || 0)}s`
   );
 
-  return elapsed;
+  return totalSessionPresence;
+}
+
+/**
+ * Incrementa o tempo de fala acumulado na sessão ativa de um usuário.
+ * @param {string} userId - ID do usuário
+ * @param {number} seconds - Segundos a adicionar
+ */
+export function incrementSessionSpeakingTime(userId, seconds) {
+  const session = presenceSessions.get(userId);
+  if (session) {
+    session.speakingSeconds = (session.speakingSeconds || 0) + seconds;
+  }
 }
 
 /**
@@ -74,11 +105,11 @@ export async function flushAllPresence() {
   const now = Date.now();
 
   for (const [userId, session] of presenceSessions.entries()) {
-    const elapsed = (now - session.joinedAt) / 1000;
+    const elapsed = (now - session.lastFlushedAt) / 1000;
     if (elapsed > 0) {
       await addPresenceTime(userId, session.username, elapsed);
-      // Reseta o timestamp para evitar contagem dupla
-      session.joinedAt = now;
+      // Atualiza apenas a data do último flush
+      session.lastFlushedAt = now;
     }
   }
 

@@ -166,4 +166,41 @@ export async function getTopSpeakers(limit = 10) {
   return data || [];
 }
 
+/**
+ * Salva uma sessão histórica de voz na tabela voice_sessions.
+ * @param {Object} sessionData - Dados da sessão
+ * @param {string} sessionData.userId - ID do usuário
+ * @param {string} sessionData.username - Nome do usuário
+ * @param {string} sessionData.channelId - ID do canal de voz
+ * @param {number} sessionData.joinedAt - Timestamp de entrada (ms)
+ * @param {number} sessionData.leftAt - Timestamp de saída (ms)
+ * @param {number} sessionData.presenceSeconds - Tempo de presença (segundos)
+ * @param {number} sessionData.speakingSeconds - Tempo de fala (segundos)
+ */
+export async function saveVoiceSession({
+  userId,
+  username,
+  channelId,
+  joinedAt,
+  leftAt,
+  presenceSeconds,
+  speakingSeconds,
+}) {
+  const { error } = await supabase
+    .from('voice_sessions')
+    .insert({
+      user_id: userId,
+      username: username,
+      channel_id: channelId,
+      joined_at: new Date(joinedAt).toISOString(),
+      left_at: new Date(leftAt).toISOString(),
+      presence_seconds: Math.floor(presenceSeconds),
+      speaking_seconds: Math.floor(speakingSeconds),
+    });
+
+  if (error) {
+    console.error(`❌ Erro ao salvar sessão de voz no histórico de ${username}:`, error.message);
+  }
+}
+
 export { supabase };

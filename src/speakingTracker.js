@@ -5,6 +5,7 @@
 // efetivamente falando (emitindo som) em canais de voz.
 
 import { addSpeakingTime } from './database.js';
+import { incrementSessionSpeakingTime } from './voiceTracker.js';
 
 /**
  * Map em memória para rastrear timestamps de início de fala.
@@ -62,6 +63,8 @@ export async function stopSpeaking(guildId, userId) {
   // Salva no banco — descarta sessões menores que 0.3s (anti-ruído)
   if (elapsed >= 0.3) {
     await addSpeakingTime(userId, session.username, elapsed);
+    // Acumula também na sessão de voz ativa (para o histórico)
+    incrementSessionSpeakingTime(userId, elapsed);
   }
 
   return elapsed;
@@ -88,6 +91,8 @@ export async function flushAllSpeaking() {
     const elapsed = (now - session.startedAt) / 1000;
     if (elapsed >= 0.3) {
       await addSpeakingTime(session.userId, session.username, elapsed);
+      // Acumula também na sessão de voz ativa (para o histórico)
+      incrementSessionSpeakingTime(session.userId, elapsed);
       // Reseta o timestamp
       session.startedAt = now;
     }
@@ -117,6 +122,8 @@ export async function stopAllSpeaking(guildId) {
 
     if (elapsed >= 0.3) {
       await addSpeakingTime(session.userId, session.username, elapsed);
+      // Acumula também na sessão de voz ativa (para o histórico)
+      incrementSessionSpeakingTime(session.userId, elapsed);
     }
   }
 }
