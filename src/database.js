@@ -247,8 +247,8 @@ export async function awardBadge(userId, username, badgeIcon, badgeName, badgeTa
       user_id: userId,
       username: username,
       badge_icon: badgeIcon,
-      badge_name: badgeName,
-      badge_tag: badgeTag || ''
+      badge_name: badgeName
+      // badge_tag removido pois não existia no schema original do CREATE TABLE
     });
 
   if (error) {
