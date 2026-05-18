@@ -4,10 +4,26 @@
 // Gerencia o rastreamento de quando os usuários estão
 // efetivamente falando (emitindo som) em canais de voz.
 
-import { addSpeakingTime } from './database.js';
+import { addSpeakingTime, addEconomy } from './database.js';
 import { incrementSessionSpeakingTime, getSessionChannelId } from './voiceTracker.js';
 import { evaluateLootDrop } from './utils/lootSystem.js';
 import { client } from './index.js';
+import { climateState } from './climate.js';
+
+async function processEconomy(userId, username, elapsed) {
+  // Chance de ganhar moedas para não perder frações em falas curtas (2 moedas por minuto)
+  const expectedCoins = elapsed * (2 / 60);
+  let coinsToAward = Math.floor(expectedCoins);
+  if (Math.random() < (expectedCoins - coinsToAward)) coinsToAward += 1;
+
+  let bonusXp = 0;
+  if (climateState.currentEvent === 'XP_STORM') bonusXp = Math.floor(elapsed * 6);
+  if (climateState.currentEvent === 'COIN_RUSH') coinsToAward *= 2;
+
+  if (coinsToAward > 0 || bonusXp > 0) {
+    await addEconomy(userId, username, coinsToAward, bonusXp);
+  }
+}
 
 /**
  * Map em memória para rastrear timestamps de início de fala.
@@ -65,6 +81,7 @@ export async function stopSpeaking(guildId, userId) {
   // Salva no banco — descarta sessões menores que 0.3s (anti-ruído)
   if (elapsed >= 0.3) {
     await addSpeakingTime(userId, session.username, elapsed);
+    await processEconomy(userId, session.username, elapsed);
     // Acumula também na sessão de voz ativa (para o histórico)
     incrementSessionSpeakingTime(userId, elapsed);
     
@@ -102,6 +119,7 @@ export async function flushAllSpeaking() {
     const elapsed = (now - session.startedAt) / 1000;
     if (elapsed >= 0.3) {
       await addSpeakingTime(session.userId, session.username, elapsed);
+      await processEconomy(session.userId, session.username, elapsed);
       // Acumula também na sessão de voz ativa (para o histórico)
       incrementSessionSpeakingTime(session.userId, elapsed);
       // Reseta o timestamp
@@ -133,6 +151,7 @@ export async function stopAllSpeaking(guildId) {
 
     if (elapsed >= 0.3) {
       await addSpeakingTime(session.userId, session.username, elapsed);
+      await processEconomy(session.userId, session.username, elapsed);
       // Acumula também na sessão de voz ativa (para o histórico)
       incrementSessionSpeakingTime(session.userId, elapsed);
     }

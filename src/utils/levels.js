@@ -7,14 +7,14 @@
 /**
  * Calcula os dados de nível baseados no tempo de presença e tempo de fala.
  * @param {number} presenceTime - Tempo total de presença em segundos
- * @param {number} speakingTime - Tempo total de fala em segundos
+ * @param {number} bonusXp - Bônus de XP do banco de dados
  */
-export function getLevelData(presenceTime, speakingTime) {
+export function getLevelData(presenceTime, speakingTime, bonusXp = 0) {
   const totalPresence = Math.floor(presenceTime || 0);
   const totalSpeaking = Math.floor(speakingTime || 0);
   
-  // XP: 3 XP por segundo falado, 1 XP por segundo de presença (1/3 de fala)
-  const xp = (totalSpeaking * 3) + (totalPresence * 1);
+  // XP: 3 XP por segundo falado, 1 XP por segundo de presença (1/3 de fala) + Bônus
+  const xp = (totalSpeaking * 3) + (totalPresence * 1) + Math.floor(bonusXp || 0);
   
   // Fórmula do Nível: Nível = Math.floor(Math.sqrt(xp / 100)) + 1
   // Progressão Quadrática:

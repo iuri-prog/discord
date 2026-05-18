@@ -333,4 +333,58 @@ export async function getBestFriend(userId) {
   return bestFriend;
 }
 
+/**
+ * Retorna as moedas e bônus de XP do usuário
+ */
+export async function getEconomy(userId) {
+  const { data, error } = await supabase
+    .from('voice_metrics')
+    .select('voice_coins, bonus_xp')
+    .eq('user_id', userId)
+    .single();
+  if (error || !data) return { voice_coins: 0, bonus_xp: 0 };
+  return data;
+}
+
+/**
+ * Adiciona moedas e bônus de XP ao usuário
+ */
+export async function addEconomy(userId, username, coins = 0, bonusXp = 0) {
+  if (coins === 0 && bonusXp === 0) return;
+  const user = await getOrCreateUser(userId, username);
+  if (!user) return;
+  
+  const { error } = await supabase
+    .from('voice_metrics')
+    .update({
+      voice_coins: (user.voice_coins || 0) + coins,
+      bonus_xp: (user.bonus_xp || 0) + bonusXp,
+      username: username
+    })
+    .eq('user_id', userId);
+    
+  if (error) console.error(`❌ Erro ao adicionar economia para ${username}:`, error.message);
+}
+
+/**
+ * Deduz moedas do usuário (retorna true se teve saldo, false se não)
+ */
+export async function spendCoins(userId, amount) {
+  const user = await getOrCreateUser(userId, 'Unknown');
+  if (!user || (user.voice_coins || 0) < amount) return false;
+  
+  const { error } = await supabase
+    .from('voice_metrics')
+    .update({
+      voice_coins: user.voice_coins - amount
+    })
+    .eq('user_id', userId);
+    
+  if (error) {
+    console.error(`❌ Erro ao gastar moedas de ${userId}:`, error.message);
+    return false;
+  }
+  return true;
+}
+
 export { supabase };

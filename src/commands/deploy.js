@@ -10,8 +10,9 @@ import { data as statusvoz } from './statusvoz.js';
 import { data as topfala } from './topfala.js';
 import { data as level } from './level.js';
 import { data as toplevel } from './toplevel.js';
+import { data as loja } from './loja.js';
 
-const commands = [statusvoz.toJSON(), topfala.toJSON(), level.toJSON(), toplevel.toJSON()];
+const commands = [statusvoz.toJSON(), topfala.toJSON(), level.toJSON(), toplevel.toJSON(), loja.toJSON()];
 
 const rest = new REST({ version: '10' }).setToken(config.token);
 

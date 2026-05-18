@@ -32,12 +32,14 @@ import {
   leaveChannel,
   disconnectAll,
 } from './voiceManager.js';
+import { startClimateEngine } from './climate.js';
 
 // Importa os comandos e script de deploy
 import * as statusvozCommand from './commands/statusvoz.js';
 import * as topfalaCommand from './commands/topfala.js';
 import * as levelCommand from './commands/level.js';
 import * as toplevelCommand from './commands/toplevel.js';
+import * as lojaCommand from './commands/loja.js';
 import { deployCommands } from './commands/deploy.js';
 
 
@@ -60,6 +62,7 @@ client.commands.set(statusvozCommand.data.name, statusvozCommand);
 client.commands.set(topfalaCommand.data.name, topfalaCommand);
 client.commands.set(levelCommand.data.name, levelCommand);
 client.commands.set(toplevelCommand.data.name, toplevelCommand);
+client.commands.set(lojaCommand.data.name, lojaCommand);
 
 // ============================================
 // 3. Evento: Bot está pronto
@@ -123,6 +126,9 @@ client.once(Events.ClientReady, async (readyClient) => {
       console.error('❌ Erro no flush periódico:', err.message);
     }
   }, config.SAVE_INTERVAL_MS);
+
+  // Inicia motor de eventos climáticos
+  startClimateEngine(readyClient);
 
   console.log('✅ Sincronização inicial concluída. Bot operacional.');
 });

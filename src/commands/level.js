@@ -45,7 +45,7 @@ export async function execute(interaction) {
   }
 
   // Cálculos de Nível e Progresso
-  const lvl = getLevelData(metrics.total_presence_time, metrics.total_speaking_time);
+  const lvl = getLevelData(metrics.total_presence_time, metrics.total_speaking_time, metrics.bonus_xp || 0);
   const progressBar = renderProgressBar(lvl.progressPercent, 15);
   
   // Formatação de Tempos
@@ -107,6 +107,11 @@ export async function execute(interaction) {
       {
         name: '🧪 XP Acumulado',
         value: `🔮 \`${lvl.xp}\` XP total`,
+        inline: true,
+      },
+      {
+        name: '🪙 Saldo na Carteira',
+        value: `💰 \`${metrics.voice_coins || 0}\` Voice Coins`,
         inline: true,
       },
       {
