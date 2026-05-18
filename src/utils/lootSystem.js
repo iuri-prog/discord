@@ -2,8 +2,7 @@
 // utils/lootSystem.js — Motor de Drops e Badges
 // ============================================
 
-import { awardBadge, getUserBadges } from '../database.js';
-
+import { awardBadge, getUserBadges, addSpeakingTime } from '../database.js';
 // Cache em memória para garantir que não haja drops repetidos mesmo com delay/erro no Supabase
 const pendingAwards = new Set(); // Formato: 'userId:badgeName'
 
@@ -130,11 +129,10 @@ export async function evaluateLootDrop(client, guildId, channelId, userId, usern
   // Avaliar loots elegíveis
   const eligibleLoots = LOOT_TABLE.filter(loot => 
     loot.condition(speakDurationSeconds) && 
-    !earnedBadgeIds.includes(loot.name) &&
     !pendingAwards.has(`${userId}:${loot.name}`) // Bloqueio imediato no cache
   );
 
-  if (eligibleLoots.length === 0) return; // Não há loots possíveis ou já tem todos
+  if (eligibleLoots.length === 0) return; // Não há loots possíveis
 
   // Rolagem de dados (RNG)
   for (const loot of eligibleLoots) {
@@ -142,16 +140,26 @@ export async function evaluateLootDrop(client, guildId, channelId, userId, usern
     
     // Se a rolagem for menor ou igual à chance (ex: 0.04 <= 0.05) -> VENCEU!
     if (roll <= loot.chance) {
-      console.log(`🎁 [LOOT DROP] ${username} ganhou a conquista: ${loot.name}`);
+      const isDuplicate = earnedBadgeIds.includes(loot.name);
+      const timesEarned = existingBadges.filter(b => b.badge_name === loot.name).length + 1;
+
+      console.log(`🎁 [LOOT DROP] ${username} ${isDuplicate ? 'evoluiu' : 'ganhou'} a conquista: ${loot.name} (Nível ${timesEarned})`);
       
-      // Trava no cache local IMEDIATAMENTE para garantir anti-duplicação absoluta
-      pendingAwards.add(`${userId}:${loot.name}`);
+      // Trava no cache local IMEDIATAMENTE e solta depois de 60s
+      const cacheKey = `${userId}:${loot.name}`;
+      pendingAwards.add(cacheKey);
+      setTimeout(() => pendingAwards.delete(cacheKey), 60000);
 
       // Salva no banco de dados
       await awardBadge(userId, username, loot.icon, loot.name, loot.tag);
 
+      // Concede 1000 XP bônus (334 segundos de fala real * 3) se for repetido
+      if (isDuplicate) {
+        await addSpeakingTime(userId, username, 334);
+      }
+
       // Dispara a recompensa visual no Discord
-      await announceLootDrop(client, guildId, channelId, userId, loot);
+      await announceLootDrop(client, guildId, channelId, userId, loot, isDuplicate, timesEarned);
       
       // Garante que só ganhe 1 loot por avaliação
       break; 
@@ -162,7 +170,7 @@ export async function evaluateLootDrop(client, guildId, channelId, userId, usern
 /**
  * Anuncia no servidor e muda o apelido temporariamente (ou adiciona a tag).
  */
-async function announceLootDrop(client, guildId, channelId, userId, loot) {
+async function announceLootDrop(client, guildId, channelId, userId, loot, isDuplicate = false, timesEarned = 1) {
   try {
     const guild = await client.guilds.fetch(guildId);
     if (!guild) return;
@@ -172,16 +180,20 @@ async function announceLootDrop(client, guildId, channelId, userId, loot) {
     
     // Enviar mensagem no chat de texto vinculado ao canal de voz (se possível)
     const channel = await guild.channels.fetch(channelId);
+    
+    let messageContent = '';
+    if (isDuplicate) {
+      messageContent = `⚡ **EVOLUÇÃO ÉPICA!** ${member.user} acaba de evoluir sua conquista **${loot.icon} ${loot.name}** para o **Nível ${timesEarned}**!\nGanhou \`+1000 XP\` de bônus!`;
+    } else {
+      messageContent = `🎉 **DROP ÉPICO!** ${member.user} acaba de desbloquear uma nova conquista secreta: **${loot.icon} ${loot.name}**!\nUma tag especial \`${loot.tag}\` foi adicionada ao seu perfil!`;
+    }
+
     if (channel && channel.isTextBased()) { // A partir de certas atualizações, canais de voz têm chat de texto associado
-      await channel.send({
-        content: `🎉 **DROP ÉPICO!** ${member.user} acaba de desbloquear uma nova conquista secreta: **${loot.icon} ${loot.name}**!\nUma tag especial \`${loot.tag}\` foi adicionada ao seu perfil!`
-      });
+      await channel.send({ content: messageContent });
     } else {
       // Se não conseguir mandar no chat do canal de voz, pode mandar no canal do sistema (systemChannel)
       if (guild.systemChannel) {
-        await guild.systemChannel.send({
-          content: `🎉 **DROP DE VOZ!** ${member.user} desbloqueou a conquista secreta: **${loot.icon} ${loot.name}** lá no canal de voz!`
-        });
+        await guild.systemChannel.send({ content: messageContent });
       }
     }
 

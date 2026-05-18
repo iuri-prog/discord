@@ -52,7 +52,20 @@ export async function execute(interaction) {
   // Formata as badges para exibir no inventário
   let badgesDisplay = 'Nenhuma conquista desbloqueada ainda. Fale mais para dropar loot!';
   if (badges && badges.length > 0) {
-    badgesDisplay = badges.map(b => `${b.badge_icon} **${b.badge_name}**`).join(' | ');
+    const badgeCounts = {};
+    badges.forEach(b => {
+      if (!badgeCounts[b.badge_name]) {
+        badgeCounts[b.badge_name] = { icon: b.badge_icon, count: 0 };
+      }
+      badgeCounts[b.badge_name].count++;
+    });
+
+    badgesDisplay = Object.entries(badgeCounts).map(([name, data]) => {
+      if (data.count > 1) {
+        return `${data.icon} **${name} (x${data.count})**`;
+      }
+      return `${data.icon} **${name}**`;
+    }).join(' | ');
   }
 
   const embed = new EmbedBuilder()

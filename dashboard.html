@@ -845,14 +845,21 @@
         }
       }
 
-      const nodes = Array.from(nodesMap.values()).map(n => ({
-        id: n.id,
-        label: n.label,
-        value: n.value,
-        title: `Tempo total: ${formatDuration(n.value)}`,
-        color: { background: '#8b5cf6', border: '#6d28d9', highlight: { background: '#ec4899', border: '#be185d' } },
-        font: { color: '#ffffff' }
-      }));
+      const nodes = Array.from(nodesMap.values()).map(n => {
+        const userMetrics = cachedMetrics.find(m => m.user_id === n.id);
+        let extraInfo = '';
+        if (userMetrics) {
+           extraInfo = `<br>🗣️ Fala Real: <b>${formatDuration(userMetrics.total_speaking_time)}</b><br>🕒 Presença Total: <b>${formatDuration(userMetrics.total_presence_time)}</b>`;
+        }
+        return {
+          id: n.id,
+          label: n.label,
+          value: n.value,
+          title: `<div style="padding:4px; font-family:sans-serif; font-size:12px;">Conexões Juntos: <b>${formatDuration(n.value)}</b>${extraInfo}</div>`,
+          color: { background: '#8b5cf6', border: '#6d28d9', highlight: { background: '#ec4899', border: '#be185d' } },
+          font: { color: '#ffffff' }
+        };
+      });
 
       // Filtra arestas irrelevantes (menos de 60 segundos de overlap) para não poluir
       const edges = [];
@@ -880,11 +887,11 @@
         edges: { smooth: { type: 'continuous' } },
         physics: {
           barnesHut: { 
-            gravitationalConstant: -30000, 
-            centralGravity: 0.3, 
-            springLength: 250, 
-            springConstant: 0.04, 
-            damping: 0.09, 
+            gravitationalConstant: -2500, 
+            centralGravity: 0.1, 
+            springLength: 350, 
+            springConstant: 0.02, 
+            damping: 0.15, 
             avoidOverlap: 1 
           },
           maxVelocity: 50,
