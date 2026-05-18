@@ -275,4 +275,62 @@ export async function getUserBadges(userId) {
   return data || [];
 }
 
+/**
+ * Encontra o melhor amigo do usuário cruzando os overlaps de sessões.
+ * @param {string} userId - ID do usuário
+ * @returns {Object|null} Objeto contendo o melhor amigo ou null
+ */
+export async function getBestFriend(userId) {
+  // Puxa todas as sessões. Em produção com milhares de registros, seria melhor usar uma RPC no Supabase.
+  const { data: allSessions, error } = await supabase
+    .from('voice_sessions')
+    .select('user_id, username, channel_id, joined_at, left_at')
+    .not('left_at', 'is', null);
+
+  if (error || !allSessions) return null;
+
+  const userSessions = allSessions.filter(s => s.user_id === userId);
+  if (userSessions.length === 0) return null;
+
+  const overlapMap = {}; // userId -> overlapTime
+
+  userSessions.forEach(mySession => {
+    const myStart = new Date(mySession.joined_at).getTime();
+    const myEnd = new Date(mySession.left_at).getTime();
+
+    // Filtra pessoas que estavam no mesmo canal que eu, mas que não sou eu
+    const otherSessions = allSessions.filter(s => 
+      s.channel_id === mySession.channel_id && 
+      s.user_id !== userId
+    );
+
+    otherSessions.forEach(otherSession => {
+      const otherStart = new Date(otherSession.joined_at).getTime();
+      const otherEnd = new Date(otherSession.left_at).getTime();
+
+      const overlapStart = Math.max(myStart, otherStart);
+      const overlapEnd = Math.min(myEnd, otherEnd);
+      const overlap = (overlapEnd - overlapStart) / 1000;
+
+      if (overlap > 0) {
+        if (!overlapMap[otherSession.user_id]) {
+          overlapMap[otherSession.user_id] = { username: otherSession.username, time: 0 };
+        }
+        overlapMap[otherSession.user_id].time += overlap;
+      }
+    });
+  });
+
+  let bestFriend = null;
+  let maxTime = 0;
+  for (const [id, data] of Object.entries(overlapMap)) {
+    if (data.time > maxTime) {
+      maxTime = data.time;
+      bestFriend = { id, username: data.username, time: data.time };
+    }
+  }
+
+  return bestFriend;
+}
+
 export { supabase };

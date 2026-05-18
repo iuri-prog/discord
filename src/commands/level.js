@@ -1,20 +1,20 @@
 // ============================================
 // commands/level.js — Comando /level
 // ============================================
-// Mostra o nível de voz, XP, patente e progresso de um usuário.
+// Mostra o perfil completo de voz de um usuário.
 
 import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
-import { getUserMetrics, getUserBadges } from '../database.js';
+import { getUserMetrics, getUserBadges, getBestFriend } from '../database.js';
 import { getLevelData, renderProgressBar } from '../utils/levels.js';
-import { formatTime } from '../utils/formatTime.js';
+import { formatTime, speakingPercentage } from '../utils/formatTime.js';
 
 export const data = new SlashCommandBuilder()
   .setName('level')
-  .setDescription('Mostra o seu nível de voz, XP e patente no servidor.')
+  .setDescription('Mostra o perfil completo de voz, nível, estatísticas e conquistas.')
   .addUserOption((option) =>
     option
       .setName('usuario')
-      .setDescription('Usuário para consultar o nível (padrão: você mesmo)')
+      .setDescription('Usuário para consultar o perfil (padrão: você mesmo)')
       .setRequired(false)
   );
 
@@ -23,19 +23,20 @@ export async function execute(interaction) {
 
   const targetUser = interaction.options.getUser('usuario') || interaction.user;
   
-  // Busca métricas e badges em paralelo
-  const [metrics, badges] = await Promise.all([
+  // Busca métricas, badges e melhor amigo em paralelo
+  const [metrics, badges, bestFriend] = await Promise.all([
     getUserMetrics(targetUser.id),
-    getUserBadges(targetUser.id)
+    getUserBadges(targetUser.id),
+    getBestFriend(targetUser.id)
   ]);
 
   if (!metrics) {
     const emptyEmbed = new EmbedBuilder()
       .setColor(0x8B5CF6) // Roxo Violeta
-      .setTitle('🎙️ Sistema de Níveis de Voz')
+      .setTitle('👤 Perfil de Voz')
       .setDescription(
         `${targetUser} ainda não possui dados registrados.\n` +
-        `O ganho de XP e níveis começa assim que você entra em um canal de voz!`
+        `O rastreamento começa quando o usuário entra em um canal de voz.`
       )
       .setThumbnail(targetUser.displayAvatarURL({ size: 128 }))
       .setTimestamp();
@@ -43,11 +44,23 @@ export async function execute(interaction) {
     return interaction.editReply({ embeds: [emptyEmbed] });
   }
 
+  // Cálculos de Nível e Progresso
   const lvl = getLevelData(metrics.total_presence_time, metrics.total_speaking_time);
   const progressBar = renderProgressBar(lvl.progressPercent, 15);
   
+  // Formatação de Tempos
   const presenceFormatted = formatTime(metrics.total_presence_time);
   const speakingFormatted = formatTime(metrics.total_speaking_time);
+  const percentage = speakingPercentage(metrics.total_speaking_time, metrics.total_presence_time);
+
+  // Barra de Eficiência (Fala / Presença)
+  const barLength = 15;
+  const filledCount = Math.round(
+    (metrics.total_speaking_time / Math.max(metrics.total_presence_time, 1)) * barLength
+  );
+  const filled = '█'.repeat(Math.min(filledCount, barLength));
+  const empty = '░'.repeat(barLength - Math.min(filledCount, barLength));
+  const efficiencyBar = `\`${filled}${empty}\` ${percentage}`;
 
   // Formata as badges para exibir no inventário
   let badgesDisplay = 'Nenhuma conquista desbloqueada ainda. Fale mais para dropar loot!';
@@ -68,10 +81,17 @@ export async function execute(interaction) {
     }).join(' | ');
   }
 
+  // Informação do Melhor Amigo
+  let bestFriendDisplay = 'Ainda não passou tempo com ninguém.';
+  if (bestFriend) {
+    const timeTogether = formatTime(bestFriend.time);
+    bestFriendDisplay = `**${bestFriend.username}** \n*(Juntos por \`${timeTogether}\`)*`;
+  }
+
   const embed = new EmbedBuilder()
     .setColor(0x8B5CF6) // Roxo Violeta
-    .setTitle('🎙️ Nível de Voz')
-    .setDescription(`Perfil de voz e XP de **${targetUser.displayName || targetUser.username}**`)
+    .setTitle('👤 Perfil Completo de Voz')
+    .setDescription(`Estatísticas, nível e conquistas de **${targetUser.displayName || targetUser.username}**`)
     .setThumbnail(targetUser.displayAvatarURL({ size: 128 }))
     .addFields(
       {
@@ -95,18 +115,35 @@ export async function execute(interaction) {
         inline: false,
       },
       {
-        name: '🎧 Presença em Canal',
-        value: `\`${presenceFormatted}\` *(+${Math.floor(metrics.total_presence_time)} XP)*`,
+        name: '🎧 Presença Total',
+        value: `\`${presenceFormatted}\``,
         inline: true,
       },
       {
-        name: '🗣️ Fala Real (3x XP)',
-        value: `\`${speakingFormatted}\` *(+${Math.floor(metrics.total_speaking_time * 3)} XP)*`,
+        name: '🗣️ Fala Real',
+        value: `\`${speakingFormatted}\``,
         inline: true,
+      },
+      {
+        name: '🤝 Melhor Companhia',
+        value: bestFriendDisplay,
+        inline: true,
+      },
+      {
+        name: '📊 Eficiência de Conversa',
+        value: efficiencyBar,
+        inline: false,
       },
       {
         name: '🎒 Inventário de Conquistas (Loot)',
         value: badgesDisplay,
+        inline: false,
+      },
+      {
+        name: '🕐 Última Conexão',
+        value: metrics.last_connected
+          ? `<t:${Math.floor(new Date(metrics.last_connected).getTime() / 1000)}:R>`
+          : 'Nunca',
         inline: false,
       }
     )

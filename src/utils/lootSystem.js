@@ -18,7 +18,7 @@ export const LOOT_TABLE = [
     icon: '🦉',
     name: 'Coruja da Madrugada',
     tag: '🦉',
-    chance: 0.15, // 15% de chance
+    chance: 0.05, // 5% de chance
     condition: () => {
       const hora = new Date().getHours();
       return hora >= 2 && hora <= 5; // Entre 2 AM e 5 AM
@@ -29,7 +29,7 @@ export const LOOT_TABLE = [
     icon: '🔥',
     name: 'Máquina de Falar',
     tag: '🔥',
-    chance: 0.05, // 5% de chance
+    chance: 0.02, // 2% de chance
     condition: (speakDurationSeconds) => {
       return speakDurationSeconds > 300; // Falou por mais de 5 minutos direto
     }
@@ -39,7 +39,7 @@ export const LOOT_TABLE = [
     icon: '🗣️',
     name: 'Tagarela Inveterado',
     tag: '🗣️',
-    chance: 0.08,
+    chance: 0.03, // 3% de chance
     condition: (speakDurationSeconds) => {
       return speakDurationSeconds > 120 && speakDurationSeconds <= 300; // Entre 2 e 5 mins diretos
     }
@@ -49,7 +49,7 @@ export const LOOT_TABLE = [
     icon: '🎲',
     name: 'Sortudo do Microfone',
     tag: '🎲',
-    chance: 0.01, // 1% de chance (muito raro)
+    chance: 0.005, // 0.5% de chance (muito raro)
     condition: () => true // Pode dropar a qualquer momento que a pessoa pare de falar
   },
   {
@@ -57,7 +57,7 @@ export const LOOT_TABLE = [
     icon: '👻',
     name: 'Fantasma Tagarela',
     tag: '👻',
-    chance: 0.03,
+    chance: 0.01, // 1% de chance
     condition: (speakDurationSeconds) => {
       const hora = new Date().getHours();
       return hora === 0; // Dropa à Meia-noite (hora das bruxas)
@@ -68,7 +68,7 @@ export const LOOT_TABLE = [
     icon: '☕',
     name: 'Bom Dia, Vietnam!',
     tag: '☕',
-    chance: 0.10,
+    chance: 0.03, // 3% de chance
     condition: () => {
       const hora = new Date().getHours();
       return hora >= 6 && hora <= 9; // Drop matinal
@@ -79,7 +79,7 @@ export const LOOT_TABLE = [
     icon: '🎙️',
     name: 'O Grande Orador',
     tag: '🎙️',
-    chance: 0.20, // Alta chance, pois é difícil atingir
+    chance: 0.08, // 8% de chance
     condition: (speakDurationSeconds) => {
       return speakDurationSeconds >= 600; // Falou por mais de 10 minutos diretos!
     }
@@ -89,7 +89,7 @@ export const LOOT_TABLE = [
     icon: '⚡',
     name: 'Velocista Vocal',
     tag: '⚡',
-    chance: 0.05,
+    chance: 0.02, // 2% de chance
     condition: (speakDurationSeconds) => {
       return speakDurationSeconds >= 5 && speakDurationSeconds <= 8; // Falas muito rápidas, mas válidas
     }
@@ -99,7 +99,7 @@ export const LOOT_TABLE = [
     icon: '🍻',
     name: 'Inimigo do Fim',
     tag: '🍻',
-    chance: 0.10,
+    chance: 0.04, // 4% de chance
     condition: () => {
       const day = new Date().getDay();
       const hour = new Date().getHours();
@@ -224,7 +224,7 @@ async function announceLootDrop(client, guildId, channelId, userId, loot, isDupl
     // Usando endpoint REST direto para garantir compatibilidade com qualquer sub-versão do V14
     try {
       await client.rest.post(`/channels/${channelId}/send-soundboard-sound`, {
-        body: { sound_id: '1480429947125497866' }
+        body: { sound_id: '1505797629412511834' }
       });
     } catch (soundError) {
       console.error('❌ Erro ao tocar som do Soundboard:', soundError.message);
