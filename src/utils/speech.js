@@ -4,6 +4,7 @@
 // Usa a API de TTS do Google Translate para fazer o bot falar
 // nos canais de voz de forma prática e 100% gratuita.
 
+import https from 'https';
 import ffmpeg from 'ffmpeg-static';
 import { createAudioPlayer, createAudioResource, AudioPlayerStatus } from '@discordjs/voice';
 
@@ -44,16 +45,29 @@ export function speakText(connection, text) {
     const truncatedText = text.substring(0, 200);
     const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=pt-BR&client=tw-ob&q=${encodeURIComponent(truncatedText)}`;
     
-    // Cria o recurso de áudio com ffmpeg
-    const resource = createAudioResource(ttsUrl, {
-      inlineVolume: true
-    });
-    
-    // Define um volume agradável (0.75) para não sobressair excessivamente
-    resource.volume?.setVolume(0.75);
+    // Realiza a requisição HTTPS para obter o stream de áudio
+    https.get(ttsUrl, (res) => {
+      if (res.statusCode !== 200) {
+        console.error(`❌ [SPEECH] Erro do Google TTS. Status Code: ${res.statusCode}`);
+        return;
+      }
 
-    player.play(resource);
-    connection.subscribe(player);
+      try {
+        const resource = createAudioResource(res, {
+          inlineVolume: true
+        });
+        
+        // Define um volume agradável (0.75) para não sobressair excessivamente
+        resource.volume?.setVolume(0.75);
+
+        player.play(resource);
+        connection.subscribe(player);
+      } catch (err) {
+        console.error('❌ [SPEECH] Erro ao criar ou reproduzir AudioResource:', err.message);
+      }
+    }).on('error', (httpError) => {
+      console.error('❌ [SPEECH] Erro de rede ao buscar TTS do Google:', httpError.message);
+    });
 
     player.on('error', (error) => {
       console.error('❌ [SPEECH] Erro no player de áudio:', error.message);
