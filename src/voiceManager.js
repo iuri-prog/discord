@@ -231,3 +231,23 @@ export async function disconnectAll() {
 export function isConnectedTo(channelId) {
   return activeConnections.has(channelId);
 }
+
+/**
+ * Retorna a conexão de voz ativa para um servidor (guild) se ela estiver pronta.
+ * @param {string} guildId - ID do servidor
+ * @returns {Object|null} A conexão ou null
+ */
+export function getGuildConnection(guildId) {
+  const entry = [...activeConnections.values()].find(
+    (conn) => conn.guildId === guildId && conn.ready
+  );
+  return entry ? entry.connection : null;
+}
+
+/**
+ * Retorna todas as conexões ativas e prontas.
+ * @returns {Array<Object>} Lista de conexões prontas
+ */
+export function getReadyConnections() {
+  return [...activeConnections.values()].filter(conn => conn.ready);
+}

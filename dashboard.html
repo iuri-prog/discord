@@ -71,6 +71,26 @@
     ::-webkit-scrollbar-thumb:hover {
       background: rgba(139, 92, 246, 0.5);
     }
+    
+    /* Node Detail Sidebar */
+    #nodeSidebar {
+      position: fixed;
+      top: 0;
+      right: -400px;
+      width: 350px;
+      height: 100vh;
+      background: rgba(13, 20, 35, 0.95);
+      backdrop-filter: blur(20px);
+      border-left: 1px solid rgba(139, 92, 246, 0.3);
+      box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5);
+      transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+    }
+    #nodeSidebar.open {
+      right: 0;
+    }
   </style>
 </head>
 <body class="text-slate-200 min-h-screen flex flex-col">
@@ -788,11 +808,14 @@
 
     // ─── ABA 5: GRÁFICO SOCIAL (VIS-NETWORK) ───
     let networkGraph = null;
+    let globalEdgesMap = new Map(); // Expõe para a sidebar
+
     function renderNetworkChart() {
       if (!window.vis) return;
 
       const nodesMap = new Map();
       const edgesMap = new Map(); // key: "id1:id2", value: weight
+      globalEdgesMap = edgesMap;
 
       // 1. Agrupa sessões por canal
       const channels = {};
@@ -861,23 +884,41 @@
         };
       });
 
-      // Filtra arestas irrelevantes (menos de 60 segundos de overlap) para não poluir
-      const edges = [];
+      // Filtra arestas para manter apenas as conexões mais fortes de cada usuário
+      // Isso impede o "novelo de lã" em servidores muito ativos.
+      const nodeConnections = {};
       for (const [key, weight] of edgesMap.entries()) {
-        if (weight > 60) {
+        if (weight > 300) { // Corte mínimo de 5 minutos
           const [from, to] = key.split(':');
+          if (!nodeConnections[from]) nodeConnections[from] = [];
+          if (!nodeConnections[to]) nodeConnections[to] = [];
           
-          // Normalização do peso (log) para evitar que linhas fiquem gigantes e puxem os nós demais
-          const normalizedThickness = Math.max(1, Math.log10(weight)); 
-
-          edges.push({
-            from,
-            to,
-            value: normalizedThickness, // Define a espessura da linha
-            title: `Conexão: ${formatDuration(weight)} juntos`,
-            color: { color: 'rgba(59, 130, 246, 0.4)', highlight: '#3b82f6' }
-          });
+          nodeConnections[from].push({ to, weight, key });
+          nodeConnections[to].push({ to: from, weight, key });
         }
+      }
+
+      const finalEdgesSet = new Set();
+      for (const [nodeId, connections] of Object.entries(nodeConnections)) {
+        // Pega apenas as top 3 maiores conexões para este nó
+        connections.sort((a, b) => b.weight - a.weight)
+                   .slice(0, 3)
+                   .forEach(conn => finalEdgesSet.add(conn.key));
+      }
+
+      const edges = [];
+      for (const key of finalEdgesSet) {
+        const weight = edgesMap.get(key);
+        const [from, to] = key.split(':');
+        const normalizedThickness = Math.max(1, Math.log10(weight)); 
+        
+        edges.push({
+          from,
+          to,
+          value: normalizedThickness,
+          title: `Conexão: ${formatDuration(weight)} juntos`,
+          color: { color: 'rgba(59, 130, 246, 0.4)', highlight: '#3b82f6' }
+        });
       }
 
       const container = document.getElementById('networkGraphContainer');
@@ -886,24 +927,116 @@
         nodes: { shape: 'dot', scaling: { min: 10, max: 50 } },
         edges: { smooth: { type: 'continuous' } },
         physics: {
-          barnesHut: { 
-            gravitationalConstant: -2500, 
-            centralGravity: 0.1, 
-            springLength: 350, 
-            springConstant: 0.02, 
-            damping: 0.15, 
-            avoidOverlap: 1 
+          forceAtlas2Based: {
+            gravitationalConstant: -100,
+            centralGravity: 0.01,
+            springLength: 200,
+            springConstant: 0.08,
+            damping: 0.9, // Aumentado para reduzir a órbita/movimento contínuo
+            avoidOverlap: 0.5
           },
           maxVelocity: 50,
-          solver: 'barnesHut',
-          timestep: 0.5,
-          stabilization: { iterations: 200 }
+          solver: 'forceAtlas2Based',
+          timestep: 0.3, // Reduzido ligeiramente para maior estabilidade
+          stabilization: { iterations: 300, fit: true }
         },
         interaction: { hover: true, tooltipDelay: 100 }
       };
 
       if (networkGraph) networkGraph.destroy();
       networkGraph = new vis.Network(container, data, options);
+
+      // Trava o gráfico após a estabilização inicial para que ele fique totalmente parado
+      networkGraph.once("stabilizationIterationsDone", function() {
+        networkGraph.setOptions({ physics: { enabled: false } });
+      });
+
+      // Se o usuário arrastar um nó, podemos reativar a física momentaneamente (opcional)
+      networkGraph.on("dragStart", function(params) {
+        if (params.nodes.length > 0) {
+          networkGraph.setOptions({ physics: { enabled: true } });
+        }
+      });
+      
+      networkGraph.on("dragEnd", function(params) {
+        if (params.nodes.length > 0) {
+          // Desativa novamente após um tempo para não voltar a orbitar
+          setTimeout(() => {
+            networkGraph.setOptions({ physics: { enabled: false } });
+          }, 2000);
+        }
+      });
+
+      // Eventos para abrir o sidebar
+      networkGraph.on("selectNode", function (params) {
+        if (params.nodes.length > 0) {
+          openNodeSidebar(params.nodes[0]);
+        }
+      });
+      networkGraph.on("deselectNode", function () {
+        closeNodeSidebar();
+      });
+    }
+
+    function openNodeSidebar(userId) {
+      const sidebar = document.getElementById('nodeSidebar');
+      const nameEl = document.getElementById('sidebarName');
+      const speakEl = document.getElementById('sideSpeak');
+      const presenceEl = document.getElementById('sidePresence');
+      const overlapEl = document.getElementById('sideOverlap');
+      const connectionsList = document.getElementById('sidebarConnectionsList');
+      
+      const userMetrics = cachedMetrics.find(m => m.user_id === userId);
+      const nodeData = Array.from(networkGraph.body.data.nodes.get()).find(n => n.id === userId);
+      
+      nameEl.textContent = nodeData ? nodeData.label : 'Usuário';
+      
+      if (userMetrics) {
+        speakEl.textContent = formatDuration(userMetrics.total_speaking_time);
+        presenceEl.textContent = formatDuration(userMetrics.total_presence_time);
+      } else {
+        speakEl.textContent = 'Sem dados';
+        presenceEl.textContent = 'Sem dados';
+      }
+      
+      overlapEl.textContent = nodeData ? formatDuration(nodeData.value) : '0s';
+      
+      const userEdges = [];
+      for (const [key, weight] of globalEdgesMap.entries()) {
+        const [id1, id2] = key.split(':');
+        if (id1 === userId || id2 === userId) {
+          const targetId = id1 === userId ? id2 : id1;
+          userEdges.push({ targetId, weight });
+        }
+      }
+      
+      userEdges.sort((a, b) => b.weight - a.weight);
+      
+      connectionsList.innerHTML = '';
+      if (userEdges.length === 0) {
+         connectionsList.innerHTML = '<div class="text-slate-500 text-sm italic">Nenhuma afinidade detectada.</div>';
+      } else {
+         const top3 = userEdges.slice(0, 5); // Mostra o Top 5 no sidebar
+         top3.forEach((conn, index) => {
+            const targetNode = Array.from(networkGraph.body.data.nodes.get()).find(n => n.id === conn.targetId);
+            const targetName = targetNode ? targetNode.label : 'Desconhecido';
+            const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '👤';
+            
+            connectionsList.innerHTML += `
+              <div class="flex justify-between items-center p-2 rounded-md bg-purple-500/10 border border-purple-500/20">
+                <span class="text-sm font-medium text-purple-200 truncate pr-2 w-full">${medal} ${targetName}</span>
+                <span class="text-xs font-bold text-white bg-purple-500/40 px-2 py-1 rounded whitespace-nowrap">${formatDuration(conn.weight)}</span>
+              </div>
+            `;
+         });
+      }
+      
+      sidebar.classList.add('open');
+    }
+
+    function closeNodeSidebar() {
+      document.getElementById('nodeSidebar').classList.remove('open');
+      if (networkGraph) networkGraph.unselectAll();
     }
 
     // ==================== UTILS ====================
@@ -921,5 +1054,49 @@
       return str;
     }
   </script>
+  <!-- ==================== NODE SIDEBAR ==================== -->
+  <div id="nodeSidebar" class="text-slate-200">
+    <div class="p-5 border-b border-purple-500/20 flex justify-between items-center bg-slate-900/50">
+      <h2 class="text-xl font-bold text-white flex items-center gap-2">
+        <span class="text-2xl">👤</span> <span id="sidebarName">Usuário</span>
+      </h2>
+      <button onclick="closeNodeSidebar()" class="text-slate-400 hover:text-white transition">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+    <div class="p-5 overflow-y-auto flex-1 space-y-6">
+      
+      <!-- Metrics -->
+      <div>
+        <h3 class="text-xs font-semibold text-purple-400 uppercase tracking-wider mb-3">Métricas Gerais</h3>
+        <div class="bg-slate-800/50 rounded-lg p-3 space-y-2 border border-slate-700/50">
+          <div class="flex justify-between items-center text-sm">
+            <span class="text-slate-400">🗣️ Fala Real</span>
+            <span id="sideSpeak" class="font-bold text-white">0s</span>
+          </div>
+          <div class="flex justify-between items-center text-sm">
+            <span class="text-slate-400">🕒 Presença Total</span>
+            <span id="sidePresence" class="font-bold text-white">0s</span>
+          </div>
+          <div class="flex justify-between items-center text-sm">
+            <span class="text-slate-400">🤝 Conexão Total</span>
+            <span id="sideOverlap" class="font-bold text-white">0s</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Connections -->
+      <div>
+        <h3 class="text-xs font-semibold text-purple-400 uppercase tracking-wider mb-3">Maiores Afinidades (Top 3)</h3>
+        <div id="sidebarConnectionsList" class="space-y-2">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+
+    </div>
+  </div>
+
 </body>
 </html>

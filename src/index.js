@@ -31,8 +31,10 @@ import {
   joinChannel,
   leaveChannel,
   disconnectAll,
+  getReadyConnections,
 } from './voiceManager.js';
 import { startClimateEngine } from './climate.js';
+import { speakRandomPhrase } from './utils/speech.js';
 
 // Importa os comandos e script de deploy
 import * as statusvozCommand from './commands/statusvoz.js';
@@ -40,6 +42,7 @@ import * as topfalaCommand from './commands/topfala.js';
 import * as levelCommand from './commands/level.js';
 import * as toplevelCommand from './commands/toplevel.js';
 import * as lojaCommand from './commands/loja.js';
+import * as falarCommand from './commands/falar.js';
 import { deployCommands } from './commands/deploy.js';
 
 
@@ -63,6 +66,7 @@ client.commands.set(topfalaCommand.data.name, topfalaCommand);
 client.commands.set(levelCommand.data.name, levelCommand);
 client.commands.set(toplevelCommand.data.name, toplevelCommand);
 client.commands.set(lojaCommand.data.name, lojaCommand);
+client.commands.set(falarCommand.data.name, falarCommand);
 
 // ============================================
 // 3. Evento: Bot está pronto
@@ -129,6 +133,9 @@ client.once(Events.ClientReady, async (readyClient) => {
 
   // Inicia motor de eventos climáticos
   startClimateEngine(readyClient);
+
+  // Inicia o agendador de fala periódica
+  startPeriodicSpeechScheduler(readyClient);
 
   console.log('✅ Sincronização inicial concluída. Bot operacional.');
 });
@@ -209,6 +216,44 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
   }
 });
+
+// ============================================
+// Agendador de fala periódica
+// ============================================
+function startPeriodicSpeechScheduler(client) {
+  // Configura a fala periódica para acontecer a cada 15-30 minutos (valores randômicos para naturalidade)
+  const minMinutes = 15;
+  const maxMinutes = 30;
+  const delayMs = Math.floor(Math.random() * (maxMinutes - minMinutes + 1) + minMinutes) * 60 * 1000;
+
+  setTimeout(async () => {
+    try {
+      const connections = getReadyConnections();
+      if (connections.length > 0) {
+        // Escolhe uma conexão/guild aleatória onde o bot está presente
+        const randomConnEntry = connections[Math.floor(Math.random() * connections.length)];
+        const guild = client.guilds.cache.get(randomConnEntry.guildId);
+        
+        if (guild) {
+          const botMember = guild.members.me;
+          const voiceChannel = botMember?.voice?.channel;
+          
+          // Garante que só fala se houver pelo menos um humano conectado no canal do bot
+          if (voiceChannel) {
+            const humanCount = voiceChannel.members.filter(m => !m.user.bot).size;
+            if (humanCount > 0) {
+              speakRandomPhrase(randomConnEntry.connection);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('❌ [SPEECH] Erro no agendador de fala periódica:', err.message);
+    }
+    // Repete recursivamente para o próximo período aleatório
+    startPeriodicSpeechScheduler(client);
+  }, delayMs);
+}
 
 // ============================================
 // 6. Graceful Shutdown — Salva tudo antes de encerrar

@@ -220,8 +220,8 @@ async function announceLootDrop(client, guildId, channelId, userId, loot, isDupl
       }
     }
 
-    // Tocar o efeito sonoro no Soundboard do Discord (API V14)
-    // Usando endpoint REST direto para garantir compatibilidade com qualquer sub-versão do V14
+    // Efeito sonoro desativado a pedido do usuário (remover som de passar de nível)
+    /*
     try {
       await client.rest.post(`/channels/${channelId}/send-soundboard-sound`, {
         body: { sound_id: '1505797629412511834' }
@@ -229,6 +229,7 @@ async function announceLootDrop(client, guildId, channelId, userId, loot, isDupl
     } catch (soundError) {
       console.error('❌ Erro ao tocar som do Soundboard:', soundError.message);
     }
+    */
 
   } catch (error) {
     console.error('❌ Erro ao processar recompensa visual do loot:', error.message);

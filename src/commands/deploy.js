@@ -11,8 +11,16 @@ import { data as topfala } from './topfala.js';
 import { data as level } from './level.js';
 import { data as toplevel } from './toplevel.js';
 import { data as loja } from './loja.js';
+import { data as falar } from './falar.js';
 
-const commands = [statusvoz.toJSON(), topfala.toJSON(), level.toJSON(), toplevel.toJSON(), loja.toJSON()];
+const commands = [
+  statusvoz.toJSON(),
+  topfala.toJSON(),
+  level.toJSON(),
+  toplevel.toJSON(),
+  loja.toJSON(),
+  falar.toJSON()
+];
 
 const rest = new REST({ version: '10' }).setToken(config.token);
 
