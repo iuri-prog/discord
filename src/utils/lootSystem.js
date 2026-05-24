@@ -333,14 +333,24 @@ export async function syncMemberNicknameBadges(member) {
     let currentName = member.displayName;
     let cleanName = currentName;
     
-    // Primeiro, limpa todas as possíveis tags de conquistas do nome atual
+    // Coleta todos os caracteres de emojis individuais usados nas conquistas da LOOT_TABLE
+    const badgeEmojis = new Set();
     for (const loot of LOOT_TABLE) {
-      const allTags = [loot.tag, ...(loot.evolutions || []).map(ev => ev.tag)];
-      for (const t of allTags) {
-        cleanName = cleanName.replace(` ${t}`, '').replace(t, '');
+      for (const char of loot.tag) badgeEmojis.add(char);
+      if (loot.evolutions) {
+        for (const ev of loot.evolutions) {
+          for (const char of ev.tag) badgeEmojis.add(char);
+        }
       }
     }
-    cleanName = cleanName.trim();
+
+    // Remove todos os caracteres/emojis de conquistas do nome atual
+    for (const emoji of badgeEmojis) {
+      cleanName = cleanName.replaceAll(emoji, '');
+    }
+    
+    // Remove múltiplos espaços extras deixados pela remoção
+    cleanName = cleanName.replace(/\s+/g, ' ').trim();
 
     // Agora, coleta as tags ativas correspondentes às conquistas que o usuário tem no banco
     const activeTags = [];
