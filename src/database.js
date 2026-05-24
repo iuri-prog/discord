@@ -287,6 +287,45 @@ export async function getUserBadges(userId) {
   return data || [];
 }
 
+let cachedRarityStats = {};
+let lastStatsFetchTime = 0;
+
+/**
+ * Busca estatísticas de posse (raridade) das conquistas no banco de dados.
+ * Conta o número de ocorrências de cada badge_name globalmente.
+ * @returns {Promise<Object>} Um objeto mapeando badge_name para o número total de ocorrências.
+ */
+export async function getBadgeRarityStats() {
+  const now = Date.now();
+  // Cache de 5 minutos para evitar chamadas excessivas ao Supabase
+  if (now - lastStatsFetchTime < 5 * 60 * 1000 && Object.keys(cachedRarityStats).length > 0) {
+    return cachedRarityStats;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('user_badges')
+      .select('badge_name');
+
+    if (error) throw error;
+
+    const counts = {};
+    if (data) {
+      data.forEach(row => {
+        counts[row.badge_name] = (counts[row.badge_name] || 0) + 1;
+      });
+    }
+
+    cachedRarityStats = counts;
+    lastStatsFetchTime = now;
+    return counts;
+  } catch (err) {
+    console.error('❌ [DB] Erro ao buscar estatísticas de raridade:', err.message);
+    return cachedRarityStats || {};
+  }
+}
+
+
 /**
  * Encontra o melhor amigo do usuário cruzando os overlaps de sessões.
  * @param {string} userId - ID do usuário

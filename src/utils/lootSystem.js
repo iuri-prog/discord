@@ -2,7 +2,7 @@
 // utils/lootSystem.js — Motor de Drops e Badges
 // ============================================
 
-import { awardBadge, getUserBadges, addSpeakingTime, updateDatabaseUsername } from '../database.js';
+import { awardBadge, getUserBadges, addSpeakingTime, updateDatabaseUsername, getBadgeRarityStats } from '../database.js';
 // Cache em memória para garantir que não haja drops repetidos mesmo com delay/erro no Supabase
 const pendingAwards = new Set(); // Formato: 'userId:badgeName'
 
@@ -352,20 +352,43 @@ export async function syncMemberNicknameBadges(member) {
     // Remove múltiplos espaços extras deixados pela remoção
     cleanName = cleanName.replace(/\s+/g, ' ').trim();
 
-    // Agora, coleta as tags ativas correspondentes às conquistas que o usuário tem no banco
-    const activeTags = [];
+    // Coleciona as conquistas ativas do usuário e suas tags
+    const activeBadgesList = [];
     for (const loot of LOOT_TABLE) {
       const count = badgeCounts[loot.name] || 0;
       if (count > 0) {
         const badgeInfo = getCurrentBadgeInfo(loot, count);
-        activeTags.push(badgeInfo.tag);
+        activeBadgesList.push({
+          name: loot.name,
+          tag: badgeInfo.tag
+        });
       }
+    }
+
+    // Busca estatísticas globais de raridade no banco de dados
+    const rarityStats = await getBadgeRarityStats();
+
+    // Ordena do mais raro para o mais comum (menor contagem global no banco = mais raro)
+    activeBadgesList.sort((a, b) => {
+      const countA = rarityStats[a.name] !== undefined ? rarityStats[a.name] : Infinity;
+      const countB = rarityStats[b.name] !== undefined ? rarityStats[b.name] : Infinity;
+      return countA - countB;
+    });
+
+    // Pega os 3 mais raros e calcula o excedente
+    const displayBadges = activeBadgesList.slice(0, 3);
+    const extraCount = activeBadgesList.length - 3;
+
+    const tagsToDisplay = displayBadges.map(b => b.tag);
+    let tagSuffix = tagsToDisplay.join(' ');
+    if (extraCount > 0) {
+      tagSuffix += ` [+${extraCount}]`;
     }
 
     // Junta as tags ativas ao final do nome limpo
     let newName = cleanName;
-    if (activeTags.length > 0) {
-      newName = `${cleanName} ${activeTags.join(' ')}`.substring(0, 32).trim();
+    if (tagsToDisplay.length > 0) {
+      newName = `${cleanName} ${tagSuffix}`.substring(0, 32).trim();
     }
 
     if (newName !== currentName) {
