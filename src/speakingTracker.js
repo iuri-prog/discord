@@ -5,7 +5,7 @@
 // efetivamente falando (emitindo som) em canais de voz.
 
 import { addSpeakingTime, addEconomy } from './database.js';
-import { incrementSessionSpeakingTime, getSessionChannelId } from './voiceTracker.js';
+import { incrementSessionSpeakingTime, getSessionChannelId, isTracking, startPresenceTracking } from './voiceTracker.js';
 import { evaluateLootDrop } from './utils/lootSystem.js';
 import { climateState } from './climate.js';
 
@@ -60,6 +60,21 @@ export function startSpeaking(guildId, userId, username) {
     username,
     userId,
   });
+
+  // Auto-cura de presença: se por algum motivo o usuário não estiver sendo rastreado
+  // na tabela de presença, tenta iniciar o rastreamento recuperando o canal dele do Discord.
+  if (!isTracking(userId)) {
+    import('./index.js').then(({ client }) => {
+      const guild = client.guilds.cache.get(guildId);
+      const member = guild?.members.cache.get(userId);
+      const channelId = member?.voice?.channelId;
+      if (channelId) {
+        startPresenceTracking(userId, username, channelId);
+      }
+    }).catch(err => {
+      console.error('❌ [AUTO-CURA] Erro ao recuperar canal de voz do usuário em startSpeaking:', err.message);
+    });
+  }
 }
 
 /**
@@ -85,7 +100,21 @@ export async function stopSpeaking(guildId, userId) {
     incrementSessionSpeakingTime(userId, elapsed);
     
     // Tenta dropar um Loot!
-    const channelId = getSessionChannelId(userId);
+    let channelId = getSessionChannelId(userId);
+    if (!channelId) {
+      // Tenta recuperar canal do Discord se ainda estiver nulo (auto-cura de fallback)
+      try {
+        const guild = (await import('./index.js')).client.guilds.cache.get(guildId);
+        const member = guild?.members.cache.get(userId);
+        channelId = member?.voice?.channelId;
+        if (channelId) {
+          startPresenceTracking(userId, session.username, channelId);
+        }
+      } catch (err) {
+        console.error('❌ [AUTO-CURA] Falha no fallback de stopSpeaking:', err.message);
+      }
+    }
+
     if (channelId) {
       // Importa dinamicamente para evitar dependência circular na inicialização de comandos
       import('./index.js').then(({ client }) => {
