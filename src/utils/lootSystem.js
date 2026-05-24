@@ -331,23 +331,9 @@ export async function syncMemberNicknameBadges(member) {
     }
 
     let currentName = member.displayName;
-    let cleanName = currentName;
     
-    // Coleta todos os caracteres de emojis individuais usados nas conquistas da LOOT_TABLE
-    const badgeEmojis = new Set();
-    for (const loot of LOOT_TABLE) {
-      for (const char of loot.tag) badgeEmojis.add(char);
-      if (loot.evolutions) {
-        for (const ev of loot.evolutions) {
-          for (const char of ev.tag) badgeEmojis.add(char);
-        }
-      }
-    }
-
-    // Remove todos os caracteres/emojis de conquistas do nome atual
-    for (const emoji of badgeEmojis) {
-      cleanName = cleanName.replaceAll(emoji, '');
-    }
+    // Remove TODOS os emojis do nome original (qualquer emoji não-conquista será deletado)
+    let cleanName = currentName.replace(/\p{Extended_Pictographic}/gu, '');
     
     // Remove múltiplos espaços extras deixados pela remoção
     cleanName = cleanName.replace(/\s+/g, ' ').trim();
