@@ -6,8 +6,10 @@
 
 import https from 'https';
 import ffmpeg from 'ffmpeg-static';
-import { createAudioPlayer, createAudioResource, AudioPlayerStatus } from '@discordjs/voice';
+import { createAudioPlayer, createAudioResource, AudioPlayerStatus, StreamType } from '@discordjs/voice';
 import { getRandomQuote } from '../database.js';
+import fs from 'fs';
+import path from 'path';
 
 // Define o caminho do ffmpeg para que o @discordjs/voice consiga transcodificar o MP3 do TTS
 process.env.FFMPEG_PATH = ffmpeg;
@@ -88,27 +90,103 @@ export function speakText(connection, text, lang = 'la') {
   }
 }
 
+const recordingsDir = path.resolve('recordings');
+const metadataPath = path.resolve('recordings/metadata.json');
+
 /**
- * Escolhe uma frase aleatória (com chance de ser uma frase clonada de usuário em português,
- * ou um provérbio medonho em latim) e fala no canal usando o sotaque correto.
+ * Lê todas as gravações de voz reais disponíveis.
+ * @returns {Array<{userId: string, filePath: string, username: string}>}
+ */
+export function getRecordedVoices() {
+  try {
+    if (!fs.existsSync(recordingsDir) || !fs.existsSync(metadataPath)) return [];
+    const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8')) || {};
+    const files = fs.readdirSync(recordingsDir).filter(file => file.endsWith('.pcm'));
+    
+    return files.map(file => {
+      const userId = file.replace('.pcm', '');
+      return {
+        userId,
+        filePath: path.join(recordingsDir, file),
+        username: metadata[userId]?.username || 'Membro Desconhecido'
+      };
+    });
+  } catch (err) {
+    console.error('⚠️ [SPEECH] Erro ao ler vozes gravadas:', err.message);
+    return [];
+  }
+}
+
+/**
+ * Toca o clone de voz gravada real de um usuário.
+ * @param {import('@discordjs/voice').VoiceConnection} connection 
+ * @param {string} filePath 
+ */
+export function playRecordedVoice(connection, filePath) {
+  if (!connection) return null;
+
+  try {
+    const player = createAudioPlayer();
+    // StreamType.Raw é PCM de 16 bits, 48kHz, Little Endian, Stereo (decodificado do Opus)
+    const resource = createAudioResource(fs.createReadStream(filePath), {
+      inputType: StreamType.Raw,
+      inlineVolume: true
+    });
+
+    resource.volume?.setVolume(0.85);
+    player.play(resource);
+    connection.subscribe(player);
+
+    player.on('error', (error) => {
+      console.error('❌ [SPEECH] Erro no player ao tocar voz clonada:', error.message);
+    });
+
+    player.on(AudioPlayerStatus.Idle, () => {
+      player.stop();
+    });
+
+    return player;
+  } catch (err) {
+    console.error('❌ [SPEECH] Erro ao reproduzir clone de voz:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Escolhe uma frase/áudio aleatório para falar no canal de voz.
+ * Mistura clone de voz real gravada (40% de chance), citação TTS (30%) e provérbio em latim (30%).
  * @param {import('@discordjs/voice').VoiceConnection} connection - Conexão de voz do bot
  */
 export async function speakRandomPhrase(connection) {
   if (!connection) return null;
 
-  try {
-    const quote = await getRandomQuote();
-    // 40% de chance de citar um usuário se houver citações salvas
-    if (quote && Math.random() < 0.40) {
-      const phraseText = `Como diria o ${quote.author}: ${quote.phrase}`;
-      console.log(`🗣️ [SPEECH] Citando frase clonada: "${phraseText}"`);
-      return speakText(connection, phraseText, 'pt-BR');
+  const rand = Math.random();
+
+  // 1. 40% de chance de tocar um clone de voz real gravada se houver
+  if (rand < 0.40) {
+    const voices = getRecordedVoices();
+    if (voices.length > 0) {
+      const selected = voices[Math.floor(Math.random() * voices.length)];
+      console.log(`🗣️ [SPEECH] Reproduzindo clone de voz real de: ${selected.username}`);
+      return playRecordedVoice(connection, selected.filePath);
     }
-  } catch (err) {
-    console.error('⚠️ [SPEECH] Falha ao obter citação clonada:', err.message);
   }
 
-  // Fallback ou 60% de chance: Frase medonha em Latim
+  // 2. 30% de chance de falar uma citação via TTS
+  if (rand < 0.70) {
+    try {
+      const quote = await getRandomQuote();
+      if (quote) {
+        const phraseText = `Como diria o ${quote.author}: ${quote.phrase}`;
+        console.log(`🗣️ [SPEECH] Citando citação via TTS: "${phraseText}"`);
+        return speakText(connection, phraseText, 'pt-BR');
+      }
+    } catch (err) {
+      console.error('⚠️ [SPEECH] Falha ao obter citação clonada para TTS:', err.message);
+    }
+  }
+
+  // 3. Fallback / 30% de chance: Provérbio medonho em latim
   const randomIndex = Math.floor(Math.random() * RANDOM_PHRASES.length);
   const phrase = RANDOM_PHRASES[randomIndex];
   console.log(`🗣️ [SPEECH] Falando frase medonha em latim: "${phrase}"`);

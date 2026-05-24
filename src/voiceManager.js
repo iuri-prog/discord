@@ -9,15 +9,79 @@ import {
   getVoiceConnection,
   VoiceConnectionStatus,
   entersState,
+  EndBehaviorType,
 } from '@discordjs/voice';
 import { startSpeaking, stopSpeaking, stopAllSpeaking } from './speakingTracker.js';
 import { ChannelType } from 'discord.js';
+import fs from 'fs';
+import path from 'path';
+import prism from 'prism-media';
+import { pipeline } from 'stream';
+
+// Cria pasta recordings se não existir
+fs.mkdirSync('./recordings', { recursive: true });
 
 /**
  * Map de canais onde o bot está conectado.
- * Chave: channelId | Valor: { connection, guildId }
+ * Chave: channelId | Valor: { connection, guildId, ready }
  */
 const activeConnections = new Map();
+
+// Rastreia gravações ativas para evitar conflitos
+const recordingUsers = new Set();
+const metadataPath = path.resolve('./recordings/metadata.json');
+
+/**
+ * Salva metadados do usuário gravado
+ */
+function saveVoiceMetadata(userId, username) {
+  try {
+    let metadata = {};
+    if (fs.existsSync(metadataPath)) {
+      metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8')) || {};
+    }
+    metadata[userId] = { username, updatedAt: new Date().toISOString() };
+    fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2));
+  } catch (err) {
+    console.error('⚠️ [REC] Erro ao salvar metadados de gravação:', err.message);
+  }
+}
+
+/**
+ * Grava o fluxo de áudio de um usuário, decodifica para PCM e salva localmente.
+ */
+function recordUserVoice(connection, userId, username) {
+  if (recordingUsers.has(userId)) return;
+  recordingUsers.add(userId);
+
+  try {
+    const receiver = connection.receiver;
+    const opusStream = receiver.subscribe(userId, {
+      end: {
+        behavior: EndBehaviorType.AfterSilence,
+        duration: 1200, // termina após 1.2 segundos de silêncio
+      },
+    });
+
+    const decoder = new prism.opus.Decoder({ rate: 48000, channels: 2, frameSize: 960 });
+    const recordingPath = path.resolve(`./recordings/${userId}.pcm`);
+    const writeStream = fs.createWriteStream(recordingPath);
+
+    pipeline(opusStream, decoder, writeStream, (err) => {
+      recordingUsers.delete(userId);
+      if (err) {
+        if (!err.message.includes('premature close')) {
+          console.error(`❌ [REC] Erro ao gravar voz de ${username}:`, err.message);
+        }
+      } else {
+        saveVoiceMetadata(userId, username);
+      }
+    });
+  } catch (err) {
+    recordingUsers.delete(userId);
+    console.error(`❌ [REC] Falha crítica ao iniciar gravação de ${username}:`, err.message);
+  }
+}
 
 /**
  * Conecta o bot a um canal de voz para escutar eventos de fala.
@@ -82,6 +146,9 @@ export async function joinChannel(channel, client) {
       const username = member?.displayName || member?.user?.username || userId;
 
       startSpeaking(channel.guild.id, userId, username);
+
+      // Grava a fala do usuário em segundo plano
+      recordUserVoice(connection, userId, username);
     });
 
     /**
