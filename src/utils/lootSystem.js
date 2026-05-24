@@ -364,14 +364,16 @@ export async function syncMemberNicknameBadges(member) {
       return countA - countB;
     });
 
-    // Pega os 3 mais raros e calcula o excedente
+    // Pega os 3 mais raros
     const displayBadges = activeBadgesList.slice(0, 3);
-    const extraCount = activeBadgesList.length - 3;
 
     const tagsToDisplay = displayBadges.map(b => b.tag);
     let tagSuffix = tagsToDisplay.join(' ');
-    if (extraCount > 0) {
-      tagSuffix += ` [+${extraCount}]`;
+    
+    // O sufixo [+x] representa a soma total acumulada de todas as conquistas do usuário
+    const totalEarned = existingBadges ? existingBadges.length : 0;
+    if (totalEarned > 0) {
+      tagSuffix += ` [+${totalEarned}]`;
     }
 
     // Junta as tags ativas ao final do nome limpo
