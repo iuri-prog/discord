@@ -301,15 +301,10 @@ export async function syncMemberNicknameBadges(member) {
   if (!member) return;
 
   const username = member.user?.username || member.id;
-
-  if (!member.manageable) {
-    console.warn(`⚠️ [SYNC NICKNAME] Não é possível alterar o nickname de ${username} (Sem permissão do Discord / Hierarquia de Cargos / Dono do Servidor)`);
-    return;
-  }
+  const userId = member.id;
+  const currentUsername = member.displayName || member.user?.username;
 
   try {
-    const userId = member.id;
-    const currentUsername = member.displayName || member.user?.username;
     const existingBadges = await getUserBadges(userId);
 
     // Checa se o username atual é diferente do cadastrado no banco para atualizar
@@ -320,6 +315,11 @@ export async function syncMemberNicknameBadges(member) {
 
     if (dbUsername && dbUsername !== currentUsername) {
       await updateDatabaseUsername(userId, currentUsername);
+    }
+
+    if (!member.manageable) {
+      console.warn(`⚠️ [SYNC NICKNAME] Não é possível alterar o nickname de ${username} (Sem permissão do Discord / Hierarquia de Cargos / Dono do Servidor)`);
+      return;
     }
 
     // Conta conquistas por nome base
@@ -361,6 +361,8 @@ export async function syncMemberNicknameBadges(member) {
     if (newName !== currentName) {
       await member.setNickname(newName, 'Sincronização automática de apelido com conquistas do banco');
       console.log(`🔄 [SYNC NICKNAME] Nickname de ${username} sincronizado para: ${newName}`);
+      // Atualiza o banco de dados para refletir o novo apelido com as tags
+      await updateDatabaseUsername(userId, newName);
     }
   } catch (err) {
     console.error(`❌ Erro ao sincronizar nickname de ${username}:`, err.message);
