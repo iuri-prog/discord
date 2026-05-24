@@ -201,6 +201,36 @@ export const LOOT_TABLE = [
       { threshold: 5, icon: '📿', name: 'Monge Meditativo', tag: '📿' },
       { threshold: 20, icon: '🗿', name: 'Estátua de Pedra', tag: '🗿' }
     ]
+  },
+  {
+    id: 'astrocram',
+    icon: '🎥',
+    name: 'Astro da Câmera',
+    tag: '🎥',
+    type: 'presence',
+    chance: 0.50, // 50% de chance
+    condition: (presenceSeconds, userId, speakingSeconds, cameraSeconds) => {
+      return cameraSeconds >= 1800; // 30 minutos de câmera ligada
+    },
+    evolutions: [
+      { threshold: 5, icon: '🎬', name: 'Cineasta de Call', tag: '🎬' },
+      { threshold: 20, icon: '🌟', name: 'Estrela de Hollywood', tag: '🌟' }
+    ]
+  },
+  {
+    id: 'maratonistacam',
+    icon: '📷',
+    name: 'Maratonista de Webcam',
+    tag: '📷',
+    type: 'presence',
+    chance: 0.80, // 80% de chance
+    condition: (presenceSeconds, userId, speakingSeconds, cameraSeconds) => {
+      return cameraSeconds >= 3600; // 1 hora de câmera ligada
+    },
+    evolutions: [
+      { threshold: 5, icon: '👁️', name: 'Vigilante Visual', tag: '👁️' },
+      { threshold: 20, icon: '🛸', name: 'Streamer Interestelar', tag: '🛸' }
+    ]
   }
 ];
 
@@ -458,7 +488,7 @@ export async function syncMemberNicknameBadges(member) {
  * Tenta dropar um loot de presença para o usuário baseado na duração da chamada.
  * Executada apenas quando o usuário sai do canal de voz.
  */
-export async function evaluatePresenceLootDrop(client, guildId, channelId, userId, username, presenceSeconds, speakingSeconds) {
+export async function evaluatePresenceLootDrop(client, guildId, channelId, userId, username, presenceSeconds, speakingSeconds, cameraSeconds = 0) {
   // Ignora chamadas muito curtas (menos de 60 segundos)
   if (presenceSeconds < 60) return;
 
@@ -468,7 +498,7 @@ export async function evaluatePresenceLootDrop(client, guildId, channelId, userI
   // Filtra as conquistas elegíveis do tipo presence
   const eligibleLoots = LOOT_TABLE.filter(loot => 
     loot.type === 'presence' &&
-    loot.condition(presenceSeconds, userId, speakingSeconds) &&
+    loot.condition(presenceSeconds, userId, speakingSeconds, cameraSeconds) &&
     !pendingAwards.has(`${userId}:${loot.name}`)
   );
 

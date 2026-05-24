@@ -116,7 +116,8 @@ client.once(Events.ClientReady, async (readyClient) => {
           startPresenceTracking(
             memberId,
             member.displayName || member.user.username,
-            channel.id
+            channel.id,
+            member.voice?.selfVideo || false
           );
         }
         // Sincroniza apelido se necessário
@@ -165,7 +166,7 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
 
   // ─── Caso 1: Usuário ENTROU em um canal de voz ─────────────
   if (!oldChannelId && newChannelId) {
-    startPresenceTracking(userId, username, newChannelId);
+    startPresenceTracking(userId, username, newChannelId, newState.selfVideo || false);
 
     // Sincroniza para garantir que o bot está no canal mais cheio
     await syncVoiceChannels(newState.guild, client);
@@ -186,7 +187,7 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
   else if (oldChannelId && newChannelId && oldChannelId !== newChannelId) {
     // Finaliza a sessão do canal antigo e inicia no novo
     await stopPresenceTracking(userId);
-    startPresenceTracking(userId, username, newChannelId);
+    startPresenceTracking(userId, username, newChannelId, newState.selfVideo || false);
 
     // Sincroniza para atualizar a conexão do bot para o canal mais cheio
     await syncVoiceChannels(newState.guild, client);
@@ -200,6 +201,15 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
   // Não afeta presença — o usuário continua no canal.
   // Mute/deaf NÃO interrompe a presença, apenas a fala é gerenciada
   // pelo speaking event listener no voiceManager.
+  
+  // Detecta câmera ligada/desligada na mesma sala
+  if (oldState.selfVideo !== newState.selfVideo) {
+    import('./voiceTracker.js').then(({ updateCameraState }) => {
+      updateCameraState(userId, newState.selfVideo || false);
+    }).catch(err => {
+      console.error('❌ Erro ao importar voiceTracker no VoiceStateUpdate (vídeo):', err.message);
+    });
+  }
 });
 
 // ============================================

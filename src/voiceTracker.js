@@ -18,7 +18,7 @@ const presenceSessions = new Map();
  * @param {string} username - Nome de exibição
  * @param {string} channelId - ID do canal de voz
  */
-export function startPresenceTracking(userId, username, channelId) {
+export function startPresenceTracking(userId, username, channelId, initialVideo = false) {
   // Se já existe uma sessão ativa, finaliza a anterior primeiro
   if (presenceSessions.has(userId)) {
     stopPresenceTracking(userId);
@@ -32,9 +32,11 @@ export function startPresenceTracking(userId, username, channelId) {
     channelId,
     speakingSeconds: 0, // Acumulador de segundos falados nesta sessão
     thresholdsChecked: new Set(), // Registra quais conquistas de limite de fala foram avaliadas
+    cameraStartedAt: initialVideo ? now : null, // Timestamp de quando ligou a câmera
+    cameraSeconds: 0, // Segundos com a câmera ligada na sessão atual
   });
 
-  console.log(`📥 [PRESENÇA] ${username} entrou no canal de voz (${channelId})`);
+  console.log(`📥 [PRESENÇA] ${username} entrou no canal de voz (${channelId}) ${initialVideo ? 'com câmera ligada' : ''}`);
 }
 
 /**
@@ -50,6 +52,13 @@ export async function stopPresenceTracking(userId) {
   const elapsedSinceLastFlush = (now - session.lastFlushedAt) / 1000;
   const totalSessionPresence = (now - session.originalJoinedAt) / 1000;
   
+  // Computa tempo restante de câmera ligada se ainda estiver ativa ao desconectar
+  if (session.cameraStartedAt) {
+    const elapsedCam = (now - session.cameraStartedAt) / 1000;
+    session.cameraSeconds = (session.cameraSeconds || 0) + elapsedCam;
+    session.cameraStartedAt = null;
+  }
+
   presenceSessions.delete(userId);
 
   // 1. Salva a parte pendente (desde o último flush) nas métricas globais
@@ -70,7 +79,7 @@ export async function stopPresenceTracking(userId) {
 
   console.log(
     `📤 [PRESENÇA] ${session.username} saiu. ` +
-    `Presença total: ${Math.floor(totalSessionPresence)}s | Fala total: ${Math.floor(session.speakingSeconds || 0)}s`
+    `Presença total: ${Math.floor(totalSessionPresence)}s | Fala total: ${Math.floor(session.speakingSeconds || 0)}s | Câmera total: ${Math.floor(session.cameraSeconds || 0)}s`
   );
 
   // Importa dinamicamente o client do Discord e o motor de loot para avaliar conquistas de presença ao sair
@@ -85,7 +94,8 @@ export async function stopPresenceTracking(userId) {
           userId,
           session.username,
           totalSessionPresence,
-          session.speakingSeconds || 0
+          session.speakingSeconds || 0,
+          session.cameraSeconds || 0
         ).catch(err => {
           console.error('❌ Erro no evaluatePresenceLootDrop:', err.message);
         });
@@ -200,4 +210,29 @@ export function checkAndMarkSessionThreshold(userId, thresholdKey) {
   }
   session.thresholdsChecked.add(thresholdKey);
   return true;
+}
+
+/**
+ * Atualiza o estado da câmera (ligada/desligada) do usuário.
+ * @param {string} userId - ID do usuário
+ * @param {boolean} isCamOn - Estado da câmera
+ */
+export function updateCameraState(userId, isCamOn) {
+  const session = presenceSessions.get(userId);
+  if (!session) return;
+
+  const now = Date.now();
+  if (isCamOn) {
+    if (!session.cameraStartedAt) {
+      session.cameraStartedAt = now;
+      console.log(`📷 [CÂMERA] ${session.username} ligou a câmera.`);
+    }
+  } else {
+    if (session.cameraStartedAt) {
+      const elapsed = (now - session.cameraStartedAt) / 1000;
+      session.cameraSeconds = (session.cameraSeconds || 0) + elapsed;
+      session.cameraStartedAt = null;
+      console.log(`📷 [CÂMERA] ${session.username} desligou a câmera. Tempo na sessão: ${Math.floor(session.cameraSeconds)}s`);
+    }
+  }
 }

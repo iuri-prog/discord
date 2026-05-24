@@ -20,7 +20,9 @@ const BADGE_DESCRIPTIONS = {
   'sabado': 'Falar nas noites de sexta ou sábado (entre 22:00 e 03:00).',
   'maratonista': 'Permanecer por mais de 3 horas conectado em uma única chamada.',
   'ouvinte': 'Permanecer por mais de 1 hora na chamada apenas ouvindo (falou menos de 10 segundos).',
-  'silencio': 'Permanecer por mais de 2 horas em silêncio absoluto (sem falar) na chamada.'
+  'silencio': 'Permanecer por mais de 2 horas em silêncio absoluto (sem falar) na chamada.',
+  'astrocram': 'Permanecer com a câmera ligada por mais de 30 minutos em uma única chamada.',
+  'maratonistacam': 'Permanecer com a câmera ligada por mais de 1 hora em uma única chamada.'
 };
 
 export const data = new SlashCommandBuilder()
