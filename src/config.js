@@ -28,6 +28,7 @@ export const config = {
   token: process.env.DISCORD_TOKEN,
   clientId: process.env.DISCORD_CLIENT_ID,
   guildId: process.env.DISCORD_GUILD_ID,
+  defaultVoiceChannelId: process.env.DEFAULT_VOICE_CHANNEL_ID,
 
   // Supabase
   supabaseUrl: process.env.SUPABASE_URL,

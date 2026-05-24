@@ -13,6 +13,7 @@ import {
 } from '@discordjs/voice';
 import { startSpeaking, stopSpeaking, stopAllSpeaking } from './speakingTracker.js';
 import { ChannelType } from 'discord.js';
+import { config } from './config.js';
 import fs from 'fs';
 import path from 'path';
 import prism from 'prism-media';
@@ -240,12 +241,15 @@ export async function syncVoiceChannels(guild, client) {
   );
 
   // 1. Desconecta de qualquer canal que esteja vazio e que o bot esteja conectado
+  // DESATIVADO: O bot agora é 24/7 e não sai automaticamente quando o canal fica vazio.
+  /*
   for (const [channelId, channel] of voiceChannels) {
     const humanMembers = channel.members.filter((m) => !m.user.bot).size;
     if (humanMembers === 0 && activeConnections.has(channelId)) {
       await leaveChannel(channelId, guild.id);
     }
   }
+  */
 
   // 2. Encontra o canal mais cheio (com mais humanos ativos)
   let busiestChannel = null;
@@ -259,7 +263,7 @@ export async function syncVoiceChannels(guild, client) {
     }
   }
 
-  // 3. Gerencia a conexão com base no canal mais cheio
+  // 3. Gerencia a conexão com base no canal mais cheio ou padrão
   if (busiestChannel) {
     // Verifica se já estamos conectados a algum canal neste servidor
     const currentConnectionEntry = [...activeConnections.entries()].find(
@@ -281,6 +285,20 @@ export async function syncVoiceChannels(guild, client) {
     } else {
       // Se não estava em nenhum canal, entra no mais cheio
       await joinChannel(busiestChannel, client);
+    }
+  } else {
+    // Caso ninguém esteja em canais de voz:
+    // Se o bot não estiver conectado a nenhum canal no servidor e houver um canal padrão configurado, conecta nele!
+    const isConnectedInGuild = [...activeConnections.values()].some(
+      (conn) => conn.guildId === guild.id
+    );
+
+    if (!isConnectedInGuild && config.defaultVoiceChannelId) {
+      const defaultChannel = guild.channels.cache.get(config.defaultVoiceChannelId);
+      if (defaultChannel && (defaultChannel.type === ChannelType.GuildVoice || defaultChannel.type === ChannelType.GuildStageVoice)) {
+        console.log(`📡 [VOZ] Nenhum usuário em call. Conectando ao canal padrão 24/7: ${defaultChannel.name}`);
+        await joinChannel(defaultChannel, client);
+      }
     }
   }
 }
