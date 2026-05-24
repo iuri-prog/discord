@@ -108,7 +108,7 @@ client.once(Events.ClientReady, async (readyClient) => {
     for (const [, channel] of voiceChannels) {
       const humanMembers = channel.members.filter((m) => !m.user.bot);
 
-      // Se há humanos no canal, inicia o rastreamento de presença
+      // Se há humanos no canal, inicia o rastreamento de presença e sincroniza apelidos
       for (const [memberId, member] of humanMembers) {
         if (!isTracking(memberId)) {
           startPresenceTracking(
@@ -117,6 +117,8 @@ client.once(Events.ClientReady, async (readyClient) => {
             channel.id
           );
         }
+        // Sincroniza apelido se necessário
+        await syncMemberNicknameBadges(member).catch(() => null);
       }
     }
 
