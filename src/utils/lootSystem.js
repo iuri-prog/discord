@@ -273,34 +273,8 @@ async function announceLootDrop(client, guildId, channelId, userId, loot, isDupl
       }, 10000);
     }
 
-    // Mudar o nickname (adicionar a tag)
-    // OBS: O bot precisa ter permissão de Gerenciar Apelidos e estar ACIMA do usuário na hierarquia de cargos
-    if (member.manageable) {
-      const currentName = member.displayName;
-      
-      // Coleta todas as tags possíveis dessa conquista (base e evoluções) para remover qualquer tag anterior
-      const allTags = [loot.tag, ...(loot.evolutions || []).map(ev => ev.tag)];
-      let cleanName = currentName;
-      for (const t of allTags) {
-        cleanName = cleanName.replace(` ${t}`, '').replace(t, '');
-      }
-      cleanName = cleanName.trim();
-
-      // Limite do Discord é 32 caracteres para nicknames (sufixo agora)
-      const newName = `${cleanName} ${currentBadge.tag}`.trim().substring(0, 32);
-      await member.setNickname(newName, `Conquista desbloqueada/evoluída: ${currentBadge.name}`);
-
-      // Agenda a remoção da tag ativa após 24 horas
-      setTimeout(() => {
-        member.guild.members.fetch(userId).then(m => {
-          if (m && m.manageable && m.displayName.includes(currentBadge.tag)) {
-            // Limpa a tag ativa do nome
-            const revertedName = m.displayName.replace(` ${currentBadge.tag}`, '').replace(currentBadge.tag, '').trim();
-            m.setNickname(revertedName.substring(0, 32), 'Expirou o tempo de 24h da tag de conquista');
-          }
-        }).catch(() => {});
-      }, 24 * 60 * 60 * 1000); // 24 horas em milissegundos
-    }
+    // Sincronizar o nickname automaticamente com as conquistas do banco
+    await syncMemberNicknameBadges(member);
 
     // Efeito sonoro desativado a pedido do usuário (remover som de passar de nível)
     /*
@@ -320,57 +294,64 @@ async function announceLootDrop(client, guildId, channelId, userId, loot, isDupl
 
 /**
  * Verifica as conquistas do usuário no banco de dados e sincroniza o nickname
- * garantindo que possua os ícones corretos de evolução se algum ícone da conquista estiver presente.
+ * garantindo que possua os ícones corretos de evolução de todas as conquistas obtidas.
  * @param {import('discord.js').GuildMember} member 
  */
 export async function syncMemberNicknameBadges(member) {
-  if (!member || !member.manageable) return;
+  if (!member) return;
+
+  const username = member.user?.username || member.id;
+
+  if (!member.manageable) {
+    console.warn(`⚠️ [SYNC NICKNAME] Não é possível alterar o nickname de ${username} (Sem permissão do Discord / Hierarquia de Cargos / Dono do Servidor)`);
+    return;
+  }
 
   try {
     const userId = member.id;
     const existingBadges = await getUserBadges(userId);
-    if (!existingBadges || existingBadges.length === 0) return;
 
     // Conta conquistas por nome base
     const badgeCounts = {};
-    existingBadges.forEach(b => {
-      badgeCounts[b.badge_name] = (badgeCounts[b.badge_name] || 0) + 1;
-    });
+    if (existingBadges && existingBadges.length > 0) {
+      existingBadges.forEach(b => {
+        badgeCounts[b.badge_name] = (badgeCounts[b.badge_name] || 0) + 1;
+      });
+    }
 
     let currentName = member.displayName;
-    let newName = currentName;
-    let nameChanged = false;
+    let cleanName = currentName;
+    
+    // Primeiro, limpa todas as possíveis tags de conquistas do nome atual
+    for (const loot of LOOT_TABLE) {
+      const allTags = [loot.tag, ...(loot.evolutions || []).map(ev => ev.tag)];
+      for (const t of allTags) {
+        cleanName = cleanName.replace(` ${t}`, '').replace(t, '');
+      }
+    }
+    cleanName = cleanName.trim();
 
+    // Agora, coleta as tags ativas correspondentes às conquistas que o usuário tem no banco
+    const activeTags = [];
     for (const loot of LOOT_TABLE) {
       const count = badgeCounts[loot.name] || 0;
-      if (count === 0) continue;
-
-      const currentBadge = getCurrentBadgeInfo(loot, count);
-      const allTags = [loot.tag, ...(loot.evolutions || []).map(ev => ev.tag)];
-
-      // Checa se o apelido atual contém alguma das tags desta conquista
-      const activeTagInNickname = allTags.find(tag => currentName.includes(tag));
-
-      if (activeTagInNickname) {
-        // Se a tag no apelido for diferente da tag correta da evolução atual
-        if (activeTagInNickname !== currentBadge.tag) {
-          // Limpa todas as tags antigas desse grupo
-          for (const t of allTags) {
-            newName = newName.replace(` ${t}`, '').replace(t, '');
-          }
-          newName = newName.trim();
-          // Insere a tag correta
-          newName = `${newName} ${currentBadge.tag}`.trim().substring(0, 32);
-          nameChanged = true;
-        }
+      if (count > 0) {
+        const badgeInfo = getCurrentBadgeInfo(loot, count);
+        activeTags.push(badgeInfo.tag);
       }
     }
 
-    if (nameChanged && newName !== currentName) {
-      await member.setNickname(newName, 'Sincronização automática de tags de conquista');
-      console.log(`🔄 [SYNC NICKNAME] Nickname de ${member.user.username} sincronizado para: ${newName}`);
+    // Junta as tags ativas ao final do nome limpo
+    let newName = cleanName;
+    if (activeTags.length > 0) {
+      newName = `${cleanName} ${activeTags.join(' ')}`.substring(0, 32).trim();
+    }
+
+    if (newName !== currentName) {
+      await member.setNickname(newName, 'Sincronização automática de apelido com conquistas do banco');
+      console.log(`🔄 [SYNC NICKNAME] Nickname de ${username} sincronizado para: ${newName}`);
     }
   } catch (err) {
-    console.error(`❌ Erro ao sincronizar nickname de ${member?.user?.username || member?.id}:`, err.message);
+    console.error(`❌ Erro ao sincronizar nickname de ${username}:`, err.message);
   }
 }
