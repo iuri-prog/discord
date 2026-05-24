@@ -153,42 +153,20 @@ export function playRecordedVoice(connection, filePath) {
 }
 
 /**
- * Escolhe uma frase/áudio aleatório para falar no canal de voz.
- * Mistura clone de voz real gravada (40% de chance), citação TTS (30%) e provérbio em latim (30%).
+ * Escolhe um clone de áudio gravado real de algum membro e reproduz no canal de voz.
+ * Removeu as funções de fala em latim e citações por texto (TTS).
  * @param {import('@discordjs/voice').VoiceConnection} connection - Conexão de voz do bot
  */
 export async function speakRandomPhrase(connection) {
   if (!connection) return null;
 
-  const rand = Math.random();
-
-  // 1. 40% de chance de tocar um clone de voz real gravada se houver
-  if (rand < 0.40) {
-    const voices = getRecordedVoices();
-    if (voices.length > 0) {
-      const selected = voices[Math.floor(Math.random() * voices.length)];
-      console.log(`🗣️ [SPEECH] Reproduzindo clone de voz real de: ${selected.username}`);
-      return playRecordedVoice(connection, selected.filePath);
-    }
+  const voices = getRecordedVoices();
+  if (voices.length > 0) {
+    const selected = voices[Math.floor(Math.random() * voices.length)];
+    console.log(`🗣️ [SPEECH] Reproduzindo periodicamente clone de voz real de: ${selected.username}`);
+    return playRecordedVoice(connection, selected.filePath);
+  } else {
+    console.log('🗣️ [SPEECH] Nenhuma voz gravada disponível para fala periódica ainda.');
+    return null;
   }
-
-  // 2. 30% de chance de falar uma citação via TTS
-  if (rand < 0.70) {
-    try {
-      const quote = await getRandomQuote();
-      if (quote) {
-        const phraseText = `Como diria o ${quote.author}: ${quote.phrase}`;
-        console.log(`🗣️ [SPEECH] Citando citação via TTS: "${phraseText}"`);
-        return speakText(connection, phraseText, 'pt-BR');
-      }
-    } catch (err) {
-      console.error('⚠️ [SPEECH] Falha ao obter citação clonada para TTS:', err.message);
-    }
-  }
-
-  // 3. Fallback / 30% de chance: Provérbio medonho em latim
-  const randomIndex = Math.floor(Math.random() * RANDOM_PHRASES.length);
-  const phrase = RANDOM_PHRASES[randomIndex];
-  console.log(`🗣️ [SPEECH] Falando frase medonha em latim: "${phrase}"`);
-  return speakText(connection, phrase, 'la');
 }
