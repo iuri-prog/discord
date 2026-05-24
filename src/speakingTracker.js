@@ -7,7 +7,6 @@
 import { addSpeakingTime, addEconomy } from './database.js';
 import { incrementSessionSpeakingTime, getSessionChannelId } from './voiceTracker.js';
 import { evaluateLootDrop } from './utils/lootSystem.js';
-import { client } from './index.js';
 import { climateState } from './climate.js';
 
 async function processEconomy(userId, username, elapsed) {
@@ -88,9 +87,13 @@ export async function stopSpeaking(guildId, userId) {
     // Tenta dropar um Loot!
     const channelId = getSessionChannelId(userId);
     if (channelId) {
-      // Não bloqueia a execução principal com await
-      evaluateLootDrop(client, guildId, channelId, userId, session.username, elapsed).catch(err => {
-        console.error('❌ Erro no evaluateLootDrop:', err.message);
+      // Importa dinamicamente para evitar dependência circular na inicialização de comandos
+      import('./index.js').then(({ client }) => {
+        evaluateLootDrop(client, guildId, channelId, userId, session.username, elapsed).catch(err => {
+          console.error('❌ Erro no evaluateLootDrop:', err.message);
+        });
+      }).catch(err => {
+        console.error('❌ Erro ao importar client dinamicamente:', err.message);
       });
     }
   }
