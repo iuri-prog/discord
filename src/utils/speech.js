@@ -11,29 +11,31 @@ import { createAudioPlayer, createAudioResource, AudioPlayerStatus } from '@disc
 // Define o caminho do ffmpeg para que o @discordjs/voice consiga transcodificar o MP3 do TTS
 process.env.FFMPEG_PATH = ffmpeg;
 
-// Lista de frases aleatórias para o bot falar de tempos em tempos
+// Lista de frases medonhas em latim para a fala periódica do bot
 export const RANDOM_PHRASES = [
-  "Ei, vocês sabiam que estou contando cada segundo que vocês falam? Não fiquem calados!",
-  "Estou sentindo um silêncio constrangedor aqui...",
-  "Se falar desse XP na vida real, vocês já seriam magos supremos da oratória.",
-  "Olha só quem resolveu abrir o microfone! Que milagre dos céus.",
-  "Atenção: A economia do servidor está flutuando. Falem mais para ganhar Voice Coins!",
-  "Prossigam com a conversa, estou anotando tudo para o meu relatório confidencial de voz.",
-  "Vocês falam bastante, hein? Minha cabeça de silício já está quase fritando.",
-  "Alguém aí comeu mosca? Ninguém fala nada há minutos nesse canal.",
-  "Lembrete diário: Bebam água e não se esqueçam de respirar entre as frases.",
-  "Esse canal de voz está mais calmo do que um deserto no meio da noite.",
-  "Estou monitorando esta chamada. Por favor, digam algo interessante para eu registrar.",
-  "Falar no microfone melhora a autoconfiança. Ou pelo menos é o que dizem por aí.",
-  "Silêncio no recinto! O bot de voz mais famoso do Discord quer falar!"
+  "Memento mori. Memento te mortalem esse.",
+  "Oculi mei in tenebris te semper vident.",
+  "Fugit hora, mors venit celeriter.",
+  "Non es solus in hoc cubiculo. Respice.",
+  "Cor tuum pulsans in silentio audire possum.",
+  "Umbrae in angulis loquuntur et te vocant.",
+  "Aeterna noctis umbra animam tuam teget.",
+  "In silentio noctis, audies suspiria eorum qui perierunt.",
+  "Mors vincit omnia, et ego sum nuntius eius.",
+  "Quis te salvabit cum ultima hora venerit?",
+  "Nihil hic nisi tenebrae et silentium sempiternum.",
+  "Veni ad me. Iam sero est effugere.",
+  "Non sum solus hic. Aliquis retro te stat.",
+  "Tenebrae te vorant, paulatim, sine voce."
 ];
 
 /**
  * Fala um texto em um canal de voz usando Google TTS.
  * @param {import('@discordjs/voice').VoiceConnection} connection - Conexão de voz do bot
  * @param {string} text - Texto para falar (máx 200 caracteres)
+ * @param {string} lang - Código de idioma (ex: 'la' para latim, 'pt-BR' para português)
  */
-export function speakText(connection, text) {
+export function speakText(connection, text, lang = 'la') {
   if (!connection) {
     console.warn('⚠️ [SPEECH] Tentativa de falar sem conexão de voz ativa.');
     return null;
@@ -43,7 +45,7 @@ export function speakText(connection, text) {
     const player = createAudioPlayer();
     // Limite da API pública do Google TTS é de 200 caracteres
     const truncatedText = text.substring(0, 200);
-    const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=pt-BR&client=tw-ob&q=${encodeURIComponent(truncatedText)}`;
+    const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${lang}&client=tw-ob&q=${encodeURIComponent(truncatedText)}`;
     
     // Realiza a requisição HTTPS para obter o stream de áudio
     https.get(ttsUrl, (res) => {
@@ -57,8 +59,9 @@ export function speakText(connection, text) {
           inlineVolume: true
         });
         
-        // Define um volume agradável (0.75) para não sobressair excessivamente
-        resource.volume?.setVolume(0.75);
+        // Define um volume um pouco mais baixo (0.6) para latim para soar mais sombrio e sussurrado
+        const volume = lang === 'la' ? 0.60 : 0.75;
+        resource.volume?.setVolume(volume);
 
         player.play(resource);
         connection.subscribe(player);
@@ -85,13 +88,13 @@ export function speakText(connection, text) {
 }
 
 /**
- * Escolhe uma frase aleatória e fala no canal.
+ * Escolhe uma frase aleatória em latim e fala no canal usando a voz em latim.
  * @param {import('@discordjs/voice').VoiceConnection} connection - Conexão de voz do bot
  */
 export function speakRandomPhrase(connection) {
   if (!connection) return null;
   const randomIndex = Math.floor(Math.random() * RANDOM_PHRASES.length);
   const phrase = RANDOM_PHRASES[randomIndex];
-  console.log(`🗣️ [SPEECH] Falando frase aleatória: "${phrase}"`);
-  return speakText(connection, phrase);
+  console.log(`🗣️ [SPEECH] Falando frase medonha em latim: "${phrase}"`);
+  return speakText(connection, phrase, 'la');
 }

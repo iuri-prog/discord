@@ -15,10 +15,21 @@ export const data = new SlashCommandBuilder()
       .setName('mensagem')
       .setDescription('O texto que o bot irá falar (máx 200 caracteres)')
       .setRequired(true)
+  )
+  .addStringOption((option) =>
+    option
+      .setName('idioma')
+      .setDescription('O idioma/voz para a fala (padrão: Português)')
+      .setRequired(false)
+      .addChoices(
+        { name: 'Português', value: 'pt-BR' },
+        { name: 'Latim Medonho', value: 'la' }
+      )
   );
 
 export async function execute(interaction) {
   const text = interaction.options.getString('mensagem');
+  const lang = interaction.options.getString('idioma') || 'pt-BR';
   const guildId = interaction.guildId;
 
   // Busca a conexão ativa do bot no servidor
@@ -35,7 +46,7 @@ export async function execute(interaction) {
   await interaction.deferReply({ ephemeral: true });
 
   try {
-    const player = speakText(connection, text);
+    const player = speakText(connection, text, lang);
 
     if (player) {
       return interaction.editReply({
