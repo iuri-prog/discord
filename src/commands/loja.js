@@ -200,6 +200,11 @@ export async function execute(interaction) {
       }
     }
 
+    // Apaga a mensagem da loja automaticamente após 15 segundos para não acumular spam
+    setTimeout(() => {
+      interaction.deleteReply().catch(() => {});
+    }, 15000);
+
   } catch (error) {
     console.error('❌ Erro na execução de item da loja:', error);
     // Se der erro de permissão no Discord, tenta devolver as moedas

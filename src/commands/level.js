@@ -7,6 +7,7 @@ import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 import { getUserMetrics, getUserBadges, getBestFriend } from '../database.js';
 import { getLevelData, renderProgressBar } from '../utils/levels.js';
 import { formatTime, speakingPercentage } from '../utils/formatTime.js';
+import { LOOT_TABLE, getCurrentBadgeInfo, syncMemberNicknameBadges } from '../utils/lootSystem.js';
 
 export const data = new SlashCommandBuilder()
   .setName('level')
@@ -22,7 +23,13 @@ export async function execute(interaction) {
   await interaction.deferReply();
 
   const targetUser = interaction.options.getUser('usuario') || interaction.user;
-  
+
+  // Sincroniza apelido se necessário (checa conquistas acumuladas e atualiza apelido se tiver tag)
+  const member = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
+  if (member) {
+    await syncMemberNicknameBadges(member).catch(() => null);
+  }
+
   // Busca métricas, badges e melhor amigo em paralelo
   const [metrics, badges, bestFriend] = await Promise.all([
     getUserMetrics(targetUser.id),
@@ -74,10 +81,20 @@ export async function execute(interaction) {
     });
 
     badgesDisplay = Object.entries(badgeCounts).map(([name, data]) => {
-      if (data.count > 1) {
-        return `${data.icon} **${name} (x${data.count})**`;
+      const loot = LOOT_TABLE.find(l => l.name === name);
+      let displayIcon = data.icon;
+      let displayName = name;
+
+      if (loot) {
+        const badgeInfo = getCurrentBadgeInfo(loot, data.count);
+        displayIcon = badgeInfo.icon;
+        displayName = badgeInfo.name;
       }
-      return `${data.icon} **${name}**`;
+
+      if (data.count > 1) {
+        return `${displayIcon} **${displayName} (x${data.count})**`;
+      }
+      return `${displayIcon} **${displayName}**`;
     }).join(' | ');
   }
 
