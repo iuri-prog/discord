@@ -120,8 +120,6 @@ client.once(Events.ClientReady, async (readyClient) => {
             member.voice?.selfVideo || false
           );
         }
-        // Sincroniza apelido se necessário
-        await syncMemberNicknameBadges(member).catch(() => null);
       }
     }
 
@@ -141,11 +139,19 @@ client.once(Events.ClientReady, async (readyClient) => {
     }
   }, config.SAVE_INTERVAL_MS);
 
+  // Auto-check global de apelidos a cada 15 minutos (900.000 ms)
+  setInterval(() => {
+    runGlobalNicknameAutoCheck(readyClient);
+  }, 900000);
+
   // Inicia motor de eventos climáticos
   startClimateEngine(readyClient);
 
   // Inicia o agendador de fala periódica
   startPeriodicSpeechScheduler(readyClient);
+
+  // Executa o primeiro auto-check de apelidos no boot (carregando em lote)
+  runGlobalNicknameAutoCheck(readyClient).catch(() => null);
 
   console.log('✅ Sincronização inicial concluída. Bot operacional.');
 });
@@ -368,5 +374,37 @@ process.on('unhandledRejection', (reason) => {
   // Conecta ao Discord
   await client.login(config.token);
 })();
+
+/**
+ * Realiza uma verificação global e correção de apelidos de todos os usuários em todos os servidores.
+ * Carrega todas as conquistas do banco em lote (1 única query) para máxima performance.
+ */
+async function runGlobalNicknameAutoCheck(client) {
+  try {
+    console.log('🔍 [AUTO-CHECK] Iniciando verificação global de apelidos...');
+    const { getAllUserBadgesMap, getBadgeRarityStats } = await import('./database.js');
+    const { syncNicknameWithPreloadedData } = await import('./utils/lootSystem.js');
+
+    const badgesMap = await getAllUserBadgesMap();
+    const rarityStats = await getBadgeRarityStats();
+
+    for (const [, guild] of client.guilds.cache) {
+      try {
+        const members = await guild.members.fetch();
+        console.log(`🔍 [AUTO-CHECK] Verificando ${members.size} membros no servidor: ${guild.name}...`);
+        for (const [, member] of members) {
+          if (member.user.bot) continue;
+          const existingBadges = badgesMap[member.id] || [];
+          await syncNicknameWithPreloadedData(member, existingBadges, rarityStats).catch(() => null);
+        }
+      } catch (guildErr) {
+        console.error(`❌ [AUTO-CHECK] Erro ao sincronizar guilda ${guild.name}:`, guildErr.message);
+      }
+    }
+    console.log('✅ [AUTO-CHECK] Verificação global de apelidos concluída.');
+  } catch (err) {
+    console.error('❌ [AUTO-CHECK] Falha na verificação global de apelidos:', err.message);
+  }
+}
 
 

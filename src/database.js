@@ -574,6 +574,34 @@ export async function updateDatabaseUsername(userId, newUsername) {
   }
 }
 
+/**
+ * Busca todas as conquistas do banco agrupadas por user_id.
+ * @returns {Promise<Object>} Um objeto mapeando user_id para um array de conquistas do usuário.
+ */
+export async function getAllUserBadgesMap() {
+  try {
+    const { data, error } = await supabase
+      .from('user_badges')
+      .select('*');
+
+    if (error) throw error;
+
+    const map = {};
+    if (data) {
+      data.forEach(b => {
+        if (!map[b.user_id]) {
+          map[b.user_id] = [];
+        }
+        map[b.user_id].push(b);
+      });
+    }
+    return map;
+  } catch (err) {
+    console.error('❌ [DB] Erro ao carregar mapa global de badges:', err.message);
+    return {};
+  }
+}
+
 export { supabase };
 
 

@@ -386,15 +386,98 @@ async function announceLootDrop(client, guildId, channelId, userId, loot, isDupl
  * garantindo que possua os ícones corretos de evolução de todas as conquistas obtidas.
  * @param {import('discord.js').GuildMember} member 
  */
+/**
+ * Calcula o novo nickname limpo com emojis de conquistas e contador [+x] atualizado.
+ * @param {import('discord.js').GuildMember} member 
+ * @param {Array} existingBadges 
+ * @param {Object} rarityStats 
+ * @returns {Object} { newName, currentName, cleanName }
+ */
+export function computeNewNickname(member, existingBadges, rarityStats) {
+  const currentName = member.displayName || member.user?.username || '';
+  
+  // 1. Remove qualquer padrão de excedente [+x] ou [+ x] existente no apelido
+  let cleanName = currentName.replace(/\[\+\s*\d+\]/g, '');
+  
+  // 2. Remove colchetes vazios [] ou colchetes extras que possam ter sobrado
+  cleanName = cleanName.replace(/\[\s*\]/g, '');
+  
+  // 3. Remove TODOS os emojis do nome original (qualquer emoji não-conquista será deletado)
+  cleanName = cleanName.replace(/\p{Extended_Pictographic}/gu, '');
+  
+  // 4. Remove múltiplos espaços extras deixados pela remoção
+  cleanName = cleanName.replace(/\s+/g, ' ').trim();
+  
+  // Failsafe: se o nome ficou completamente vazio (ex: apelido era só emojis), usa o username original
+  if (!cleanName) {
+    cleanName = member.user?.username || 'User';
+  }
+
+  // Conta conquistas por nome base
+  const badgeCounts = {};
+  if (existingBadges && existingBadges.length > 0) {
+    existingBadges.forEach(b => {
+      badgeCounts[b.badge_name] = (badgeCounts[b.badge_name] || 0) + 1;
+    });
+  }
+
+  // Coleciona as conquistas ativas do usuário e suas tags
+  const activeBadgesList = [];
+  for (const loot of LOOT_TABLE) {
+    const count = badgeCounts[loot.name] || 0;
+    if (count > 0) {
+      const badgeInfo = getCurrentBadgeInfo(loot, count);
+      activeBadgesList.push({
+        name: loot.name,
+        tag: badgeInfo.tag
+      });
+    }
+  }
+
+  // Ordena do mais raro para o mais comum (menor contagem global no banco = mais raro)
+  activeBadgesList.sort((a, b) => {
+    const countA = rarityStats[a.name] !== undefined ? rarityStats[a.name] : Infinity;
+    const countB = rarityStats[b.name] !== undefined ? rarityStats[b.name] : Infinity;
+    return countA - countB;
+  });
+
+  // Pega os 3 mais raros
+  const displayBadges = activeBadgesList.slice(0, 3);
+
+  const tagsToDisplay = displayBadges.map(b => b.tag);
+  let tagSuffix = tagsToDisplay.join(' ');
+  
+  // O sufixo [+x] representa a soma total acumulada de todas as conquistas do usuário
+  const totalEarned = existingBadges ? existingBadges.length : 0;
+  if (totalEarned > 0) {
+    tagSuffix += ` [+${totalEarned}]`;
+  }
+
+  // Junta as tags ativas ao final do nome limpo
+  let newName = cleanName;
+  if (tagsToDisplay.length > 0) {
+    newName = `${cleanName} ${tagSuffix}`.substring(0, 32).trim();
+  }
+
+  return { newName, currentName, cleanName };
+}
+
+/**
+ * Verifica as conquistas do usuário no banco de dados e sincroniza o nickname
+ * garantindo que possua os ícones corretos de evolução de todas as conquistas obtidas.
+ * @param {import('discord.js').GuildMember} member 
+ */
 export async function syncMemberNicknameBadges(member) {
   if (!member) return;
 
   const username = member.user?.username || member.id;
   const userId = member.id;
-  const currentUsername = member.displayName || member.user?.username;
 
   try {
     const existingBadges = await getUserBadges(userId);
+    const rarityStats = await getBadgeRarityStats();
+
+    const { newName, currentName, cleanName } = computeNewNickname(member, existingBadges, rarityStats);
 
     // Checa se o username atual é diferente do cadastrado no banco para atualizar
     let dbUsername = null;
@@ -402,75 +485,12 @@ export async function syncMemberNicknameBadges(member) {
       dbUsername = existingBadges[0].username;
     }
 
-    const cleanCurrent = currentUsername.replace(/\[\+\s*\d+\]/g, '').replace(/\p{Extended_Pictographic}/gu, '').replace(/\s+/g, ' ').trim();
-
-    if (dbUsername && dbUsername !== cleanCurrent) {
-      await updateDatabaseUsername(userId, cleanCurrent);
+    if (dbUsername && dbUsername !== cleanName) {
+      await updateDatabaseUsername(userId, cleanName);
     }
 
     if (!member.manageable) {
-      console.warn(`⚠️ [SYNC NICKNAME] Não é possível alterar o nickname de ${username} (Sem permissão do Discord / Hierarquia de Cargos / Dono do Servidor)`);
       return;
-    }
-
-    // Conta conquistas por nome base
-    const badgeCounts = {};
-    if (existingBadges && existingBadges.length > 0) {
-      existingBadges.forEach(b => {
-        badgeCounts[b.badge_name] = (badgeCounts[b.badge_name] || 0) + 1;
-      });
-    }
-
-    let currentName = member.displayName;
-    
-    // Remove qualquer padrão de excedente [+x] ou [+ x] existente no apelido
-    let cleanName = currentName.replace(/\[\+\s*\d+\]/g, '');
-    
-    // Remove TODOS os emojis do nome original (qualquer emoji não-conquista será deletado)
-    cleanName = cleanName.replace(/\p{Extended_Pictographic}/gu, '');
-    
-    // Remove múltiplos espaços extras deixados pela remoção
-    cleanName = cleanName.replace(/\s+/g, ' ').trim();
-
-    // Coleciona as conquistas ativas do usuário e suas tags
-    const activeBadgesList = [];
-    for (const loot of LOOT_TABLE) {
-      const count = badgeCounts[loot.name] || 0;
-      if (count > 0) {
-        const badgeInfo = getCurrentBadgeInfo(loot, count);
-        activeBadgesList.push({
-          name: loot.name,
-          tag: badgeInfo.tag
-        });
-      }
-    }
-
-    // Busca estatísticas globais de raridade no banco de dados
-    const rarityStats = await getBadgeRarityStats();
-
-    // Ordena do mais raro para o mais comum (menor contagem global no banco = mais raro)
-    activeBadgesList.sort((a, b) => {
-      const countA = rarityStats[a.name] !== undefined ? rarityStats[a.name] : Infinity;
-      const countB = rarityStats[b.name] !== undefined ? rarityStats[b.name] : Infinity;
-      return countA - countB;
-    });
-
-    // Pega os 3 mais raros
-    const displayBadges = activeBadgesList.slice(0, 3);
-
-    const tagsToDisplay = displayBadges.map(b => b.tag);
-    let tagSuffix = tagsToDisplay.join(' ');
-    
-    // O sufixo [+x] representa a soma total acumulada de todas as conquistas do usuário
-    const totalEarned = existingBadges ? existingBadges.length : 0;
-    if (totalEarned > 0) {
-      tagSuffix += ` [+${totalEarned}]`;
-    }
-
-    // Junta as tags ativas ao final do nome limpo
-    let newName = cleanName;
-    if (tagsToDisplay.length > 0) {
-      newName = `${cleanName} ${tagSuffix}`.substring(0, 32).trim();
     }
 
     if (newName !== currentName) {
@@ -481,6 +501,40 @@ export async function syncMemberNicknameBadges(member) {
     }
   } catch (err) {
     console.error(`❌ Erro ao sincronizar nickname de ${username}:`, err.message);
+  }
+}
+
+/**
+ * Sincroniza o nickname de um usuário utilizando conquistas e dados de raridade pré-carregados.
+ * Otimizado para execuções globais em lote.
+ */
+export async function syncNicknameWithPreloadedData(member, existingBadges, rarityStats) {
+  if (!member) return;
+
+  const username = member.user?.username || member.id;
+  const userId = member.id;
+
+  try {
+    const { newName, currentName, cleanName } = computeNewNickname(member, existingBadges, rarityStats);
+
+    let dbUsername = null;
+    if (existingBadges && existingBadges.length > 0) {
+      dbUsername = existingBadges[0].username;
+    }
+
+    if (dbUsername && dbUsername !== cleanName) {
+      await updateDatabaseUsername(userId, cleanName);
+    }
+
+    if (!member.manageable) return;
+
+    if (newName !== currentName) {
+      await member.setNickname(newName, 'Sincronização global periódica de apelido');
+      console.log(`🔄 [BATCH SYNC] Nickname de ${username} corrigido automaticamente para: ${newName}`);
+      await updateDatabaseUsername(userId, newName);
+    }
+  } catch (err) {
+    console.error(`❌ Erro no lote de sincronização de apelido para ${username}:`, err.message);
   }
 }
 
