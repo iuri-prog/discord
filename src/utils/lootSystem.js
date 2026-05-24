@@ -372,8 +372,10 @@ export async function syncMemberNicknameBadges(member) {
       dbUsername = existingBadges[0].username;
     }
 
-    if (dbUsername && dbUsername !== currentUsername) {
-      await updateDatabaseUsername(userId, currentUsername);
+    const cleanCurrent = currentUsername.replace(/\[\+\s*\d+\]/g, '').replace(/\p{Extended_Pictographic}/gu, '').replace(/\s+/g, ' ').trim();
+
+    if (dbUsername && dbUsername !== cleanCurrent) {
+      await updateDatabaseUsername(userId, cleanCurrent);
     }
 
     if (!member.manageable) {

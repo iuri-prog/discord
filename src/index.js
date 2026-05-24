@@ -203,6 +203,28 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
 });
 
 // ============================================
+// 4.5 Evento: Alteração de membro (mudança de apelido/nickname)
+// ============================================
+client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
+  // Ignora bots
+  if (newMember.user.bot) return;
+
+  // Só age se o nickname mudou
+  if (oldMember.nickname !== newMember.nickname) {
+    console.log(`👤 [NICKNAME] Apelido de ${newMember.user.username} alterado de "${oldMember.nickname}" para "${newMember.nickname}"`);
+    
+    // Importa dinamicamente para evitar dependências circulares
+    import('./utils/lootSystem.js').then(({ syncMemberNicknameBadges }) => {
+      syncMemberNicknameBadges(newMember).catch(err => {
+        console.error(`❌ [NICKNAME] Erro ao sincronizar nickname para ${newMember.user.username}:`, err.message);
+      });
+    }).catch(err => {
+      console.error(`❌ [NICKNAME] Erro ao importar lootSystem no GuildMemberUpdate:`, err.message);
+    });
+  }
+});
+
+// ============================================
 // 5. Evento: Interação de comando (Slash Commands)
 // ============================================
 client.on(Events.InteractionCreate, async (interaction) => {

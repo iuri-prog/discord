@@ -10,6 +10,20 @@ import path from 'path';
 const supabase = createClient(config.supabaseUrl, config.supabaseKey);
 
 /**
+ * Remove qualquer tag de conquista [+x] e emojis do nome do usuário.
+ * @param {string} name - Nome original
+ * @returns {string} Nome limpo
+ */
+function cleanUsername(name) {
+  if (!name) return '';
+  return name
+    .replace(/\[\+\s*\d+\]/g, '')
+    .replace(/\p{Extended_Pictographic}/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
  * Inicializa o banco de dados.
  * Verifica se a tabela voice_metrics existe tentando uma query de teste.
  * A tabela deve ser criada previamente no painel do Supabase (veja README).
@@ -44,6 +58,7 @@ export async function initDatabase() {
  * @returns {Object} Registro do usuário
  */
 export async function getOrCreateUser(userId, username) {
+  const cleaned = cleanUsername(username) || userId;
   // Primeiro tenta buscar o usuário existente
   const { data: existing, error: fetchError } = await supabase
     .from('voice_metrics')
@@ -52,23 +67,23 @@ export async function getOrCreateUser(userId, username) {
     .single();
 
   if (existing) {
-    // Se o username mudou, atualiza no banco
-    if (existing.username !== username) {
+    // Se o username mudou, atualiza no banco (sempre limpando tags/emojis)
+    if (existing.username !== cleaned) {
       await supabase
         .from('voice_metrics')
-        .update({ username: username })
+        .update({ username: cleaned })
         .eq('user_id', userId);
-      existing.username = username;
+      existing.username = cleaned;
     }
     return existing;
   }
 
-  // Se não existe, cria com valores padrão
+  // Se não existe, cria com valores padrão (sempre limpando tags/emojis)
   const { data, error } = await supabase
     .from('voice_metrics')
     .upsert({
       user_id: userId,
-      username: username,
+      username: cleaned,
       total_presence_time: 0,
       total_speaking_time: 0,
       last_connected: new Date().toISOString(),
@@ -531,11 +546,12 @@ export async function getRandomQuote() {
  * @param {string} newUsername - Novo username/nickname
  */
 export async function updateDatabaseUsername(userId, newUsername) {
+  const cleaned = cleanUsername(newUsername) || userId;
   try {
     // 1. Atualiza na tabela voice_metrics
     const { error: metricsError } = await supabase
       .from('voice_metrics')
-      .update({ username: newUsername })
+      .update({ username: cleaned })
       .eq('user_id', userId);
 
     if (metricsError) {
@@ -545,18 +561,19 @@ export async function updateDatabaseUsername(userId, newUsername) {
     // 2. Atualiza na tabela user_badges
     const { error: badgesError } = await supabase
       .from('user_badges')
-      .update({ username: newUsername })
+      .update({ username: cleaned })
       .eq('user_id', userId);
 
     if (badgesError) {
       console.error(`❌ [DB] Erro ao atualizar username na user_badges para ${userId}:`, badgesError.message);
     }
 
-    console.log(`💾 [DB SYNC] Username do usuário ${userId} atualizado para "${newUsername}" no banco de dados.`);
+    console.log(`💾 [DB SYNC] Username do usuário ${userId} atualizado para "${cleaned}" no banco de dados.`);
   } catch (err) {
     console.error(`❌ [DB] Erro ao sincronizar username de ${userId} no banco:`, err.message);
   }
 }
 
 export { supabase };
+
 
