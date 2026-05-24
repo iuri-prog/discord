@@ -264,13 +264,13 @@ async function announceLootDrop(client, guildId, channelId, userId, loot, isDupl
       }
     }
 
-    // Apaga a mensagem automaticamente após 10 segundos (10000ms) para não acumular spam nos chats
+    // Apaga a mensagem automaticamente após 5 minutos (300000ms) para não acumular spam nos chats
     if (sentMessage) {
       setTimeout(() => {
         sentMessage.delete().catch(err => {
           console.warn(`[LOOT SYSTEM] Não foi possível deletar a mensagem de drop/conquista: ${err.message}`);
         });
-      }, 10000);
+      }, 300000);
     }
 
     // Sincronizar o nickname automaticamente com as conquistas do banco
