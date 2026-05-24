@@ -3,6 +3,8 @@
 // ============================================
 import { createClient } from '@supabase/supabase-js';
 import { config } from './config.js';
+import fs from 'fs';
+import path from 'path';
 
 // Inicializa o cliente Supabase
 const supabase = createClient(config.supabaseUrl, config.supabaseKey);
@@ -385,6 +387,93 @@ export async function spendCoins(userId, amount) {
     return false;
   }
   return true;
+}
+
+// ============================================
+// SISTEMA DE CITAÇÕES / CLONAGEM DE FRASES
+// ============================================
+
+const localQuotesPath = path.resolve('quotes.json');
+
+/**
+ * Lê frases do arquivo local quotes.json (fallback).
+ */
+async function getLocalQuotes() {
+  try {
+    if (!fs.existsSync(localQuotesPath)) {
+      await fs.promises.writeFile(localQuotesPath, JSON.stringify([], null, 2));
+      return [];
+    }
+    const content = await fs.promises.readFile(localQuotesPath, 'utf8');
+    return JSON.parse(content) || [];
+  } catch (err) {
+    console.error('⚠️ [DB] Erro ao ler quotes locais:', err.message);
+    return [];
+  }
+}
+
+/**
+ * Salva frase no arquivo local quotes.json (fallback).
+ */
+async function saveLocalQuote(author, phrase) {
+  try {
+    const quotes = await getLocalQuotes();
+    quotes.push({ author, phrase, created_at: new Date().toISOString() });
+    await fs.promises.writeFile(localQuotesPath, JSON.stringify(quotes, null, 2));
+    return true;
+  } catch (err) {
+    console.error('⚠️ [DB] Erro ao salvar quote local:', err.message);
+    return false;
+  }
+}
+
+/**
+ * Salva uma citação clonada de um usuário.
+ * Tenta usar o Supabase, se falhar ou a tabela não existir, usa o fallback local (JSON).
+ */
+export async function saveQuote(author, phrase) {
+  try {
+    const { error } = await supabase
+      .from('user_quotes')
+      .insert({ author, phrase });
+
+    if (error) {
+      console.warn('⚠️ [DB] Supabase falhou ao salvar quote, usando fallback local:', error.message);
+      return await saveLocalQuote(author, phrase);
+    }
+    return true;
+  } catch (err) {
+    console.warn('⚠️ [DB] Erro ao conectar ao Supabase para salvar quote, usando fallback local:', err.message);
+    return await saveLocalQuote(author, phrase);
+  }
+}
+
+/**
+ * Busca uma citação aleatória.
+ * Tenta usar o Supabase, se falhar ou a tabela não existir, usa o fallback local (JSON).
+ */
+export async function getRandomQuote() {
+  try {
+    const { data, error } = await supabase
+      .from('user_quotes')
+      .select('*');
+
+    if (error || !data || data.length === 0) {
+      if (error) {
+        console.warn('⚠️ [DB] Supabase falhou ao buscar quotes, usando fallback local:', error.message);
+      }
+      const local = await getLocalQuotes();
+      if (local.length === 0) return null;
+      return local[Math.floor(Math.random() * local.length)];
+    }
+    
+    return data[Math.floor(Math.random() * data.length)];
+  } catch (err) {
+    console.warn('⚠️ [DB] Erro de rede no Supabase, usando fallback local:', err.message);
+    const local = await getLocalQuotes();
+    if (local.length === 0) return null;
+    return local[Math.floor(Math.random() * local.length)];
+  }
 }
 
 export { supabase };

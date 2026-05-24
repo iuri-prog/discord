@@ -7,6 +7,7 @@
 import https from 'https';
 import ffmpeg from 'ffmpeg-static';
 import { createAudioPlayer, createAudioResource, AudioPlayerStatus } from '@discordjs/voice';
+import { getRandomQuote } from '../database.js';
 
 // Define o caminho do ffmpeg para que o @discordjs/voice consiga transcodificar o MP3 do TTS
 process.env.FFMPEG_PATH = ffmpeg;
@@ -88,11 +89,26 @@ export function speakText(connection, text, lang = 'la') {
 }
 
 /**
- * Escolhe uma frase aleatória em latim e fala no canal usando a voz em latim.
+ * Escolhe uma frase aleatória (com chance de ser uma frase clonada de usuário em português,
+ * ou um provérbio medonho em latim) e fala no canal usando o sotaque correto.
  * @param {import('@discordjs/voice').VoiceConnection} connection - Conexão de voz do bot
  */
-export function speakRandomPhrase(connection) {
+export async function speakRandomPhrase(connection) {
   if (!connection) return null;
+
+  try {
+    const quote = await getRandomQuote();
+    // 40% de chance de citar um usuário se houver citações salvas
+    if (quote && Math.random() < 0.40) {
+      const phraseText = `Como diria o ${quote.author}: ${quote.phrase}`;
+      console.log(`🗣️ [SPEECH] Citando frase clonada: "${phraseText}"`);
+      return speakText(connection, phraseText, 'pt-BR');
+    }
+  } catch (err) {
+    console.error('⚠️ [SPEECH] Falha ao obter citação clonada:', err.message);
+  }
+
+  // Fallback ou 60% de chance: Frase medonha em Latim
   const randomIndex = Math.floor(Math.random() * RANDOM_PHRASES.length);
   const phrase = RANDOM_PHRASES[randomIndex];
   console.log(`🗣️ [SPEECH] Falando frase medonha em latim: "${phrase}"`);

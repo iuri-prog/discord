@@ -12,6 +12,7 @@ import { data as level } from './level.js';
 import { data as toplevel } from './toplevel.js';
 import { data as loja } from './loja.js';
 import { data as falar } from './falar.js';
+import { data as clonar } from './clonar.js';
 
 const commands = [
   statusvoz.toJSON(),
@@ -19,7 +20,8 @@ const commands = [
   level.toJSON(),
   toplevel.toJSON(),
   loja.toJSON(),
-  falar.toJSON()
+  falar.toJSON(),
+  clonar.toJSON()
 ];
 
 const rest = new REST({ version: '10' }).setToken(config.token);
