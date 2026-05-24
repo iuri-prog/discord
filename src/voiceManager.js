@@ -58,8 +58,7 @@ function recordUserVoice(connection, userId, username) {
     const receiver = connection.receiver;
     const opusStream = receiver.subscribe(userId, {
       end: {
-        behavior: EndBehaviorType.AfterSilence,
-        duration: 1200, // termina após 1.2 segundos de silêncio
+        behavior: EndBehaviorType.Manual,
       },
     });
 
@@ -67,10 +66,18 @@ function recordUserVoice(connection, userId, username) {
     const recordingPath = path.resolve(`./recordings/${userId}.pcm`);
     const writeStream = fs.createWriteStream(recordingPath);
 
+    // Encerra e finaliza a gravação após exatamente 5 segundos
+    const recordingTimeout = setTimeout(() => {
+      if (!opusStream.destroyed) {
+        opusStream.destroy();
+      }
+    }, 5000);
+
     pipeline(opusStream, decoder, writeStream, (err) => {
+      clearTimeout(recordingTimeout);
       recordingUsers.delete(userId);
       if (err) {
-        if (!err.message.includes('premature close')) {
+        if (!err.message.includes('premature close') && !err.message.includes('destroyed')) {
           console.error(`❌ [REC] Erro ao gravar voz de ${username}:`, err.message);
         }
       } else {
