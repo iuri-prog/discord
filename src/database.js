@@ -51,7 +51,17 @@ export async function getOrCreateUser(userId, username) {
     .eq('user_id', userId)
     .single();
 
-  if (existing) return existing;
+  if (existing) {
+    // Se o username mudou, atualiza no banco
+    if (existing.username !== username) {
+      await supabase
+        .from('voice_metrics')
+        .update({ username: username })
+        .eq('user_id', userId);
+      existing.username = username;
+    }
+    return existing;
+  }
 
   // Se não existe, cria com valores padrão
   const { data, error } = await supabase
@@ -476,4 +486,38 @@ export async function getRandomQuote() {
   }
 }
 
+/**
+ * Atualiza o username/nickname do usuário no banco de dados nas tabelas voice_metrics e user_badges.
+ * @param {string} userId - ID do usuário Discord
+ * @param {string} newUsername - Novo username/nickname
+ */
+export async function updateDatabaseUsername(userId, newUsername) {
+  try {
+    // 1. Atualiza na tabela voice_metrics
+    const { error: metricsError } = await supabase
+      .from('voice_metrics')
+      .update({ username: newUsername })
+      .eq('user_id', userId);
+
+    if (metricsError) {
+      console.error(`❌ [DB] Erro ao atualizar username na voice_metrics para ${userId}:`, metricsError.message);
+    }
+
+    // 2. Atualiza na tabela user_badges
+    const { error: badgesError } = await supabase
+      .from('user_badges')
+      .update({ username: newUsername })
+      .eq('user_id', userId);
+
+    if (badgesError) {
+      console.error(`❌ [DB] Erro ao atualizar username na user_badges para ${userId}:`, badgesError.message);
+    }
+
+    console.log(`💾 [DB SYNC] Username do usuário ${userId} atualizado para "${newUsername}" no banco de dados.`);
+  } catch (err) {
+    console.error(`❌ [DB] Erro ao sincronizar username de ${userId} no banco:`, err.message);
+  }
+}
+
 export { supabase };
+

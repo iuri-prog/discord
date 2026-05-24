@@ -2,7 +2,7 @@
 // utils/lootSystem.js — Motor de Drops e Badges
 // ============================================
 
-import { awardBadge, getUserBadges, addSpeakingTime } from '../database.js';
+import { awardBadge, getUserBadges, addSpeakingTime, updateDatabaseUsername } from '../database.js';
 // Cache em memória para garantir que não haja drops repetidos mesmo com delay/erro no Supabase
 const pendingAwards = new Set(); // Formato: 'userId:badgeName'
 
@@ -309,7 +309,18 @@ export async function syncMemberNicknameBadges(member) {
 
   try {
     const userId = member.id;
+    const currentUsername = member.displayName || member.user?.username;
     const existingBadges = await getUserBadges(userId);
+
+    // Checa se o username atual é diferente do cadastrado no banco para atualizar
+    let dbUsername = null;
+    if (existingBadges && existingBadges.length > 0) {
+      dbUsername = existingBadges[0].username;
+    }
+
+    if (dbUsername && dbUsername !== currentUsername) {
+      await updateDatabaseUsername(userId, currentUsername);
+    }
 
     // Conta conquistas por nome base
     const badgeCounts = {};
