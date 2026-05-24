@@ -31,6 +31,7 @@ export function startPresenceTracking(userId, username, channelId) {
     username,
     channelId,
     speakingSeconds: 0, // Acumulador de segundos falados nesta sessão
+    thresholdsChecked: new Set(), // Registra quais conquistas de limite de fala foram avaliadas
   });
 
   console.log(`📥 [PRESENÇA] ${username} entrou no canal de voz (${channelId})`);
@@ -145,4 +146,34 @@ export async function stopAllPresenceTracking() {
  */
 export function getActiveSessionCount() {
   return presenceSessions.size;
+}
+
+/**
+ * Retorna o tempo de fala acumulado na sessão ativa de um usuário.
+ * @param {string} userId - ID do usuário
+ * @returns {number} Segundos falados na chamada atual
+ */
+export function getSessionSpeakingTime(userId) {
+  const session = presenceSessions.get(userId);
+  return session ? (session.speakingSeconds || 0) : 0;
+}
+
+/**
+ * Verifica se um threshold de fala na sessão atual já foi testado.
+ * Se não foi, marca como testado e retorna true.
+ * @param {string} userId - ID do usuário
+ * @param {string} thresholdKey - Chave identificadora do threshold (ex: 'onfire', 'orador')
+ * @returns {boolean} true se acabou de marcar como testado (primeira vez), false se já estava marcado ou sem sessão
+ */
+export function checkAndMarkSessionThreshold(userId, thresholdKey) {
+  const session = presenceSessions.get(userId);
+  if (!session) return false;
+  if (!session.thresholdsChecked) {
+    session.thresholdsChecked = new Set();
+  }
+  if (session.thresholdsChecked.has(thresholdKey)) {
+    return false;
+  }
+  session.thresholdsChecked.add(thresholdKey);
+  return true;
 }

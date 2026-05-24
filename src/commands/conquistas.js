@@ -10,12 +10,12 @@ import { LOOT_TABLE } from '../utils/lootSystem.js';
 
 const BADGE_DESCRIPTIONS = {
   'coruja': 'Falar em canais de voz entre 02:00 e 05:00 da madrugada.',
-  'onfire': 'Falar por mais de 5 minutos ininterruptos.',
-  'tagarela': 'Falar entre 2 e 5 minutos ininterruptos.',
+  'onfire': 'Falar por mais de 5 minutos acumulados em uma mesma chamada (chance de drop ao atingir a marca).',
+  'tagarela': 'Falar por mais de 2 minutos acumulados em uma mesma chamada (chance de drop ao atingir a marca).',
   'sortudo': 'Drop de chance pura ao sair da call ou parar de falar.',
   'fantasma': 'Falar durante a meia-noite (entre 00:00 e 00:59).',
   'cafe': 'Falar das 06:00 às 09:00 da manhã.',
-  'orador': 'Falar por mais de 10 minutos ininterruptos.',
+  'orador': 'Falar por mais de 10 minutos acumulados em uma mesma chamada (chance de drop ao atingir a marca).',
   'velocista': 'Falar de forma super rápida (entre 5 e 8 segundos).',
   'sabado': 'Falar nas noites de sexta ou sábado (entre 22:00 e 03:00).'
 };

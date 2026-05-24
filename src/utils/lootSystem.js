@@ -3,6 +3,7 @@
 // ============================================
 
 import { awardBadge, getUserBadges, addSpeakingTime, updateDatabaseUsername, getBadgeRarityStats } from '../database.js';
+import { getSessionSpeakingTime, checkAndMarkSessionThreshold } from '../voiceTracker.js';
 // Cache em memória para garantir que não haja drops repetidos mesmo com delay/erro no Supabase
 const pendingAwards = new Set(); // Formato: 'userId:badgeName'
 
@@ -34,9 +35,13 @@ export const LOOT_TABLE = [
     icon: '🔥',
     name: 'Máquina de Falar',
     tag: '🔥',
-    chance: 0.02, // 2% de chance
-    condition: (speakDurationSeconds) => {
-      return speakDurationSeconds > 300; // Falou por mais de 5 minutos direto
+    chance: 0.10, // 10% de chance (avaliação única por chamada ao cruzar o limite)
+    condition: (speakDurationSeconds, userId) => {
+      const sessionSpeakingTime = getSessionSpeakingTime(userId);
+      if (sessionSpeakingTime >= 300) {
+        return checkAndMarkSessionThreshold(userId, 'onfire');
+      }
+      return false;
     },
     evolutions: [
       { threshold: 5, icon: '🌋', name: 'Vulcão Vocal', tag: '🌋' },
@@ -48,9 +53,13 @@ export const LOOT_TABLE = [
     icon: '🗣️',
     name: 'Tagarela Inveterado',
     tag: '🗣️',
-    chance: 0.03, // 3% de chance
-    condition: (speakDurationSeconds) => {
-      return speakDurationSeconds > 120 && speakDurationSeconds <= 300; // Entre 2 e 5 mins diretos
+    chance: 0.05, // 5% de chance (avaliação única por chamada ao cruzar o limite)
+    condition: (speakDurationSeconds, userId) => {
+      const sessionSpeakingTime = getSessionSpeakingTime(userId);
+      if (sessionSpeakingTime >= 120) {
+        return checkAndMarkSessionThreshold(userId, 'tagarela');
+      }
+      return false;
     },
     evolutions: [
       { threshold: 5, icon: '📢', name: 'Voz Sônica', tag: '📢' },
@@ -104,9 +113,13 @@ export const LOOT_TABLE = [
     icon: '🎙️',
     name: 'O Grande Orador',
     tag: '🎙️',
-    chance: 0.08, // 8% de chance
-    condition: (speakDurationSeconds) => {
-      return speakDurationSeconds >= 600; // Falou por mais de 10 minutos diretos!
+    chance: 0.15, // 15% de chance (avaliação única por chamada ao cruzar o limite)
+    condition: (speakDurationSeconds, userId) => {
+      const sessionSpeakingTime = getSessionSpeakingTime(userId);
+      if (sessionSpeakingTime >= 600) {
+        return checkAndMarkSessionThreshold(userId, 'orador');
+      }
+      return false;
     },
     evolutions: [
       { threshold: 5, icon: '🎭', name: 'Poeta da Madrugada', tag: '🎭' },
@@ -189,7 +202,7 @@ export async function evaluateLootDrop(client, guildId, channelId, userId, usern
 
   // Avaliar loots elegíveis
   const eligibleLoots = LOOT_TABLE.filter(loot => 
-    loot.condition(speakDurationSeconds) && 
+    loot.condition(speakDurationSeconds, userId) && 
     !pendingAwards.has(`${userId}:${loot.name}`) // Bloqueio imediato no cache
   );
 
