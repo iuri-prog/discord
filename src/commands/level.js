@@ -102,7 +102,25 @@ export async function execute(interaction) {
   let bestFriendDisplay = 'Ainda não passou tempo com ninguém.';
   if (bestFriend) {
     const timeTogether = formatTime(bestFriend.time);
-    bestFriendDisplay = `**${bestFriend.username}** \n*(Juntos por \`${timeTogether}\`)*`;
+    const hours = bestFriend.time / 3600;
+    
+    let hearts = '❤️🤍🤍🤍🤍';
+    let status = 'Conhecidos';
+    if (hours >= 50) {
+      hearts = '❤️❤️❤️❤️❤️';
+      status = 'Alma Gêmea';
+    } else if (hours >= 15) {
+      hearts = '❤️❤️❤️❤️🤍';
+      status = 'Melhores Amigos';
+    } else if (hours >= 5) {
+      hearts = '❤️❤️❤️🤍🤍';
+      status = 'Amigos de Call';
+    } else if (hours >= 1) {
+      hearts = '❤️❤️🤍🤍🤍';
+      status = 'Parceiros de Papo';
+    }
+    
+    bestFriendDisplay = `<@${bestFriend.id}>\n${hearts} **${status}**\n*(Juntos por \`${timeTogether}\`)*`;
   }
 
   const embed = new EmbedBuilder()

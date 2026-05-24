@@ -73,6 +73,30 @@ export async function stopPresenceTracking(userId) {
     `Presença total: ${Math.floor(totalSessionPresence)}s | Fala total: ${Math.floor(session.speakingSeconds || 0)}s`
   );
 
+  // Importa dinamicamente o client do Discord e o motor de loot para avaliar conquistas de presença ao sair
+  import('./index.js').then(({ client }) => {
+    const channel = client.channels.cache.get(session.channelId);
+    if (channel && channel.guild) {
+      import('./utils/lootSystem.js').then(({ evaluatePresenceLootDrop }) => {
+        evaluatePresenceLootDrop(
+          client,
+          channel.guild.id,
+          channel.id,
+          userId,
+          session.username,
+          totalSessionPresence,
+          session.speakingSeconds || 0
+        ).catch(err => {
+          console.error('❌ Erro no evaluatePresenceLootDrop:', err.message);
+        });
+      }).catch(err => {
+        console.error('❌ Erro ao importar lootSystem no stopPresenceTracking:', err.message);
+      });
+    }
+  }).catch(err => {
+    console.error('❌ Erro ao importar client no stopPresenceTracking:', err.message);
+  });
+
   return totalSessionPresence;
 }
 

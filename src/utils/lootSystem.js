@@ -156,6 +156,51 @@ export const LOOT_TABLE = [
       { threshold: 5, icon: '🥂', name: 'Celebrante de Elite', tag: '🥂' },
       { threshold: 20, icon: '🍾', name: 'Lorde da Taberna', tag: '🍾' }
     ]
+  },
+  {
+    id: 'maratonista',
+    icon: '🏃‍♂️',
+    name: 'Maratonista de Call',
+    tag: '🏃‍♂️',
+    type: 'presence',
+    chance: 0.50, // 50% de chance
+    condition: (presenceSeconds) => {
+      return presenceSeconds >= 10800; // Conectado por mais de 3 horas
+    },
+    evolutions: [
+      { threshold: 5, icon: '🚴', name: 'Ciclista de Call', tag: '🚴' },
+      { threshold: 20, icon: '🏎️', name: 'Fórmula 1 de Call', tag: '🏎️' }
+    ]
+  },
+  {
+    id: 'ouvinte',
+    icon: '🎧',
+    name: 'Ouvinte Atento',
+    tag: '🎧',
+    type: 'presence',
+    chance: 0.30, // 30% de chance
+    condition: (presenceSeconds, userId, speakingSeconds) => {
+      return presenceSeconds >= 3600 && speakingSeconds <= 10; // Mais de 1 hora ouvindo, falou menos de 10s
+    },
+    evolutions: [
+      { threshold: 5, icon: '📡', name: 'Antena Humana', tag: '📡' },
+      { threshold: 20, icon: '🛰️', name: 'Satélite Espião', tag: '🛰️' }
+    ]
+  },
+  {
+    id: 'silencio',
+    icon: '🤫',
+    name: 'Lorde do Silêncio',
+    tag: '🤫',
+    type: 'presence',
+    chance: 0.40, // 40% de chance
+    condition: (presenceSeconds, userId, speakingSeconds) => {
+      return presenceSeconds >= 7200 && speakingSeconds === 0; // Mais de 2 horas em silêncio absoluto
+    },
+    evolutions: [
+      { threshold: 5, icon: '📿', name: 'Monge Meditativo', tag: '📿' },
+      { threshold: 20, icon: '🗿', name: 'Estátua de Pedra', tag: '🗿' }
+    ]
   }
 ];
 
@@ -202,6 +247,7 @@ export async function evaluateLootDrop(client, guildId, channelId, userId, usern
 
   // Avaliar loots elegíveis
   const eligibleLoots = LOOT_TABLE.filter(loot => 
+    loot.type !== 'presence' && // Ignora conquistas de presença ao falar
     loot.condition(speakDurationSeconds, userId) && 
     !pendingAwards.has(`${userId}:${loot.name}`) // Bloqueio imediato no cache
   );
@@ -403,5 +449,53 @@ export async function syncMemberNicknameBadges(member) {
     }
   } catch (err) {
     console.error(`❌ Erro ao sincronizar nickname de ${username}:`, err.message);
+  }
+}
+
+/**
+ * Tenta dropar um loot de presença para o usuário baseado na duração da chamada.
+ * Executada apenas quando o usuário sai do canal de voz.
+ */
+export async function evaluatePresenceLootDrop(client, guildId, channelId, userId, username, presenceSeconds, speakingSeconds) {
+  // Ignora chamadas muito curtas (menos de 60 segundos)
+  if (presenceSeconds < 60) return;
+
+  const existingBadges = await getUserBadges(userId);
+  const earnedBadgeIds = existingBadges.map(b => b.badge_name);
+
+  // Filtra as conquistas elegíveis do tipo presence
+  const eligibleLoots = LOOT_TABLE.filter(loot => 
+    loot.type === 'presence' &&
+    loot.condition(presenceSeconds, userId, speakingSeconds) &&
+    !pendingAwards.has(`${userId}:${loot.name}`)
+  );
+
+  if (eligibleLoots.length === 0) return;
+
+  for (const loot of eligibleLoots) {
+    const roll = Math.random();
+    if (roll <= loot.chance) {
+      const isDuplicate = earnedBadgeIds.includes(loot.name);
+      const timesEarned = existingBadges.filter(b => b.badge_name === loot.name).length + 1;
+
+      console.log(`🎁 [PRESENCE LOOT DROP] ${username} ${isDuplicate ? 'evoluiu' : 'ganhou'} a conquista: ${loot.name} (Nível ${timesEarned})`);
+
+      // Trava no cache local imediatamente por 60s
+      const cacheKey = `${userId}:${loot.name}`;
+      pendingAwards.add(cacheKey);
+      setTimeout(() => pendingAwards.delete(cacheKey), 60000);
+
+      // Salva no banco de dados
+      await awardBadge(userId, username, loot.icon, loot.name, loot.tag);
+
+      // Bônus de 1000 XP
+      if (isDuplicate) {
+        await addSpeakingTime(userId, username, 334);
+      }
+
+      // Anuncia o drop
+      await announceLootDrop(client, guildId, channelId, userId, loot, isDuplicate, timesEarned);
+      break; // Concede apenas 1 conquista por saída
+    }
   }
 }

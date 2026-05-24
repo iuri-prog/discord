@@ -17,7 +17,10 @@ const BADGE_DESCRIPTIONS = {
   'cafe': 'Falar das 06:00 às 09:00 da manhã.',
   'orador': 'Falar por mais de 10 minutos acumulados em uma mesma chamada (chance de drop ao atingir a marca).',
   'velocista': 'Falar de forma super rápida (entre 5 e 8 segundos).',
-  'sabado': 'Falar nas noites de sexta ou sábado (entre 22:00 e 03:00).'
+  'sabado': 'Falar nas noites de sexta ou sábado (entre 22:00 e 03:00).',
+  'maratonista': 'Permanecer por mais de 3 horas conectado em uma única chamada.',
+  'ouvinte': 'Permanecer por mais de 1 hora na chamada apenas ouvindo (falou menos de 10 segundos).',
+  'silencio': 'Permanecer por mais de 2 horas em silêncio absoluto (sem falar) na chamada.'
 };
 
 export const data = new SlashCommandBuilder()
