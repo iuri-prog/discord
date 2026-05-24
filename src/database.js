@@ -308,12 +308,13 @@ let lastStatsFetchTime = 0;
 /**
  * Busca estatísticas de posse (raridade) das conquistas no banco de dados.
  * Conta o número de ocorrências de cada badge_name globalmente.
+ * @param {boolean} force - Se true, força o recarregamento dos dados ignorando o cache
  * @returns {Promise<Object>} Um objeto mapeando badge_name para o número total de ocorrências.
  */
-export async function getBadgeRarityStats() {
+export async function getBadgeRarityStats(force = false) {
   const now = Date.now();
   // Cache de 5 minutos para evitar chamadas excessivas ao Supabase
-  if (now - lastStatsFetchTime < 5 * 60 * 1000 && Object.keys(cachedRarityStats).length > 0) {
+  if (!force && now - lastStatsFetchTime < 5 * 60 * 1000 && Object.keys(cachedRarityStats).length > 0) {
     return cachedRarityStats;
   }
 

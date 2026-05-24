@@ -465,9 +465,12 @@ export function computeNewNickname(member, existingBadges, rarityStats) {
 /**
  * Verifica as conquistas do usuário no banco de dados e sincroniza o nickname
  * garantindo que possua os ícones corretos de evolução de todas as conquistas obtidas.
+ * Se force for true, atualiza incondicionalmente no banco de dados e tenta atualizar
+ * no Discord mesmo se manageable for falso, capturando erros.
  * @param {import('discord.js').GuildMember} member 
+ * @param {boolean} force 
  */
-export async function syncMemberNicknameBadges(member) {
+export async function syncMemberNicknameBadges(member, force = false) {
   if (!member) return;
 
   const username = member.user?.username || member.id;
@@ -475,29 +478,41 @@ export async function syncMemberNicknameBadges(member) {
 
   try {
     const existingBadges = await getUserBadges(userId);
-    const rarityStats = await getBadgeRarityStats();
+    const rarityStats = await getBadgeRarityStats(force);
 
     const { newName, currentName, cleanName } = computeNewNickname(member, existingBadges, rarityStats);
 
-    // Checa se o username atual é diferente do cadastrado no banco para atualizar
-    let dbUsername = null;
-    if (existingBadges && existingBadges.length > 0) {
-      dbUsername = existingBadges[0].username;
-    }
-
-    if (dbUsername && dbUsername !== cleanName) {
+    // Se for modo force, atualiza o nome limpo no banco incondicionalmente
+    if (force) {
       await updateDatabaseUsername(userId, cleanName);
+    } else {
+      // Checa se o username atual é diferente do cadastrado no banco para atualizar
+      let dbUsername = null;
+      if (existingBadges && existingBadges.length > 0) {
+        dbUsername = existingBadges[0].username;
+      }
+
+      if (dbUsername && dbUsername !== cleanName) {
+        await updateDatabaseUsername(userId, cleanName);
+      }
     }
 
-    if (!member.manageable) {
-      return;
-    }
-
-    if (newName !== currentName) {
-      await member.setNickname(newName, 'Sincronização automática de apelido com conquistas do banco');
-      console.log(`🔄 [SYNC NICKNAME] Nickname de ${username} sincronizado para: ${newName}`);
-      // Atualiza o banco de dados para refletir o novo apelido com as tags
-      await updateDatabaseUsername(userId, newName);
+    // Se o apelido for diferente ou se for uma atualização forçada
+    if (newName !== currentName || force) {
+      if (member.manageable || force) {
+        try {
+          await member.setNickname(newName, force ? 'Sincronização forçada de apelido' : 'Sincronização automática de apelido com conquistas do banco');
+          console.log(`🔄 [SYNC NICKNAME] Nickname de ${username} sincronizado para: ${newName}`);
+          // Atualiza o banco de dados para refletir o novo apelido com as tags
+          await updateDatabaseUsername(userId, newName);
+        } catch (err) {
+          console.warn(`⚠️ [SYNC NICKNAME] Não foi possível alterar apelido de ${username} no Discord (Sem permissão/Hierarquia):`, err.message);
+          // Mesmo se falhar no Discord, garante que o banco de dados esteja com o nome limpo atualizado
+          await updateDatabaseUsername(userId, cleanName);
+        }
+      } else {
+        console.log(`ℹ️ [SYNC NICKNAME] Ignorando alteração no Discord para ${username} pois não é gerenciável (dono do servidor ou cargo superior).`);
+      }
     }
   } catch (err) {
     console.error(`❌ Erro ao sincronizar nickname de ${username}:`, err.message);

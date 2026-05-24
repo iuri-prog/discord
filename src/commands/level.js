@@ -24,10 +24,10 @@ export async function execute(interaction) {
 
   const targetUser = interaction.options.getUser('usuario') || interaction.user;
 
-  // Sincroniza apelido se necessário (checa conquistas acumuladas e atualiza apelido se tiver tag)
+  // Sincroniza apelido forçadamente (checa conquistas acumuladas e atualiza apelido e banco de dados)
   const member = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
   if (member) {
-    await syncMemberNicknameBadges(member).catch(() => null);
+    await syncMemberNicknameBadges(member, true).catch(() => null);
   }
 
   // Busca métricas, badges e melhor amigo em paralelo
