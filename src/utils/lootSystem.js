@@ -25,8 +25,8 @@ export const LOOT_TABLE = [
       return hora >= 2 && hora <= 5; // Entre 2 AM e 5 AM
     },
     evolutions: [
-      { threshold: 5, icon: '🔮🦉', name: 'Coruja Arcana', tag: '🔮🦉' },
-      { threshold: 20, icon: '🌌🦉', name: 'Guardião Cósmico', tag: '🌌🦉' }
+      { threshold: 5, icon: '🔮', name: 'Coruja Arcana', tag: '🔮' },
+      { threshold: 20, icon: '🌌', name: 'Guardião Cósmico', tag: '🌌' }
     ]
   },
   {
@@ -40,7 +40,7 @@ export const LOOT_TABLE = [
     },
     evolutions: [
       { threshold: 5, icon: '🌋', name: 'Vulcão Vocal', tag: '🌋' },
-      { threshold: 20, icon: '☄️🔥', name: 'Supernova Solar', tag: '☄️🔥' }
+      { threshold: 20, icon: '☄️', name: 'Supernova Solar', tag: '☄️' }
     ]
   },
   {
@@ -53,8 +53,8 @@ export const LOOT_TABLE = [
       return speakDurationSeconds > 120 && speakDurationSeconds <= 300; // Entre 2 e 5 mins diretos
     },
     evolutions: [
-      { threshold: 5, icon: '🎙️⚡', name: 'Voz Sônica', tag: '🎙️⚡' },
-      { threshold: 20, icon: '👑🗣️', name: 'Lorde da Garganta', tag: '👑🗣️' }
+      { threshold: 5, icon: '📢', name: 'Voz Sônica', tag: '📢' },
+      { threshold: 20, icon: '📣', name: 'Lorde da Garganta', tag: '📣' }
     ]
   },
   {
@@ -66,7 +66,7 @@ export const LOOT_TABLE = [
     condition: () => true, // Pode dropar a qualquer momento que a pessoa pare de falar
     evolutions: [
       { threshold: 5, icon: '🃏', name: 'Mestre das Cartas', tag: '🃏' },
-      { threshold: 20, icon: '🎰💎', name: 'Jackpot Lendário', tag: '🎰💎' }
+      { threshold: 20, icon: '🎰', name: 'Jackpot Lendário', tag: '🎰' }
     ]
   },
   {
@@ -80,7 +80,7 @@ export const LOOT_TABLE = [
       return hora === 0; // Dropa à Meia-noite (hora das bruxas)
     },
     evolutions: [
-      { threshold: 5, icon: '💀🔥', name: 'Espectro de Fogo', tag: '💀🔥' },
+      { threshold: 5, icon: '💀', name: 'Espectro de Fogo', tag: '💀' },
       { threshold: 20, icon: '👹', name: 'Ceifador de Almas', tag: '👹' }
     ]
   },
@@ -95,8 +95,8 @@ export const LOOT_TABLE = [
       return hora >= 6 && hora <= 9; // Drop matinal
     },
     evolutions: [
-      { threshold: 5, icon: '🥐☕', name: 'Desjejum do Guerreiro', tag: '🥐☕' },
-      { threshold: 20, icon: '☀️👑', name: 'Soberano da Manhã', tag: '☀️👑' }
+      { threshold: 5, icon: '🥐', name: 'Desjejum do Guerreiro', tag: '🥐' },
+      { threshold: 20, icon: '☀️', name: 'Soberano da Manhã', tag: '☀️' }
     ]
   },
   {
@@ -109,8 +109,8 @@ export const LOOT_TABLE = [
       return speakDurationSeconds >= 600; // Falou por mais de 10 minutos diretos!
     },
     evolutions: [
-      { threshold: 5, icon: '🎭🎙️', name: 'Poeta da Madrugada', tag: '🎭🎙️' },
-      { threshold: 20, icon: '🏛️👑', name: 'Lorde do Senado', tag: '🏛️👑' }
+      { threshold: 5, icon: '🎭', name: 'Poeta da Madrugada', tag: '🎭' },
+      { threshold: 20, icon: '🏛️', name: 'Lorde do Senado', tag: '🏛️' }
     ]
   },
   {
@@ -124,7 +124,7 @@ export const LOOT_TABLE = [
     },
     evolutions: [
       { threshold: 5, icon: '🌀', name: 'Ciclone Sônico', tag: '🌀' },
-      { threshold: 20, icon: '🛸⚡', name: 'Velocidade da Luz', tag: '🛸⚡' }
+      { threshold: 20, icon: '🛸', name: 'Velocidade da Luz', tag: '🛸' }
     ]
   },
   {
@@ -140,8 +140,8 @@ export const LOOT_TABLE = [
       return (day === 5 || day === 6) && (hour >= 22 || hour <= 3);
     },
     evolutions: [
-      { threshold: 5, icon: '🥂✨', name: 'Celebrante de Elite', tag: '🥂✨' },
-      { threshold: 20, icon: '🍾👑', name: 'Lorde da Taberna', tag: '🍾👑' }
+      { threshold: 5, icon: '🥂', name: 'Celebrante de Elite', tag: '🥂' },
+      { threshold: 20, icon: '🍾', name: 'Lorde da Taberna', tag: '🍾' }
     ]
   }
 ];
@@ -332,8 +332,11 @@ export async function syncMemberNicknameBadges(member) {
 
     let currentName = member.displayName;
     
+    // Remove qualquer padrão de excedente [+x] ou [+ x] existente no apelido
+    let cleanName = currentName.replace(/\[\+\s*\d+\]/g, '');
+    
     // Remove TODOS os emojis do nome original (qualquer emoji não-conquista será deletado)
-    let cleanName = currentName.replace(/\p{Extended_Pictographic}/gu, '');
+    cleanName = cleanName.replace(/\p{Extended_Pictographic}/gu, '');
     
     // Remove múltiplos espaços extras deixados pela remoção
     cleanName = cleanName.replace(/\s+/g, ' ').trim();
