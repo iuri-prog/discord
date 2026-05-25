@@ -9,33 +9,11 @@ import { ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle }
 // Cache em memória para garantir que não haja drops repetidos mesmo com delay/erro no Supabase
 const pendingAwards = new Set(); // Formato: 'userId:badgeName'
 
-// Controle de cooldowns em memória para evitar spam de conquistas de fala
-// Estrutura: userId -> { lastGlobalDrop: timestamp, badgeCooldowns: { [badgeName]: timestamp } }
-const userCooldowns = new Map();
-
-function checkAndApplyCooldown(userId, badgeName) {
-  const now = Date.now();
-  const userData = userCooldowns.get(userId) || { lastGlobalDrop: 0, badgeCooldowns: {} };
-
-  // 1. Cooldown Global: Mínimo de 5 minutos entre qualquer conquista de fala
-  const globalElapsed = now - userData.lastGlobalDrop;
-  if (globalElapsed < 5 * 60 * 1000) {
-    return false;
-  }
-
-  // 2. Cooldown do Badge: Mínimo de 30 minutos para ganhar a mesma conquista de fala novamente
-  const lastBadgeDrop = userData.badgeCooldowns[badgeName] || 0;
-  const badgeElapsed = now - lastBadgeDrop;
-  if (badgeElapsed < 30 * 60 * 1000) {
-    return false;
-  }
-
-  // Atualiza timestamps
-  userData.lastGlobalDrop = now;
-  userData.badgeCooldowns[badgeName] = now;
-  userCooldowns.set(userId, userData);
-  return true;
-}
+// Controle de cooldown de NOTIFICAÇÕES para evitar spam no chat
+// Os drops continuam acontecendo normalmente, mas o anúncio visual é limitado.
+// Estrutura: userId -> timestamp do último anúncio enviado
+const lastAnnounceTimes = new Map();
+const ANNOUNCE_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutos entre notificações por usuário
 
 /**
  * Tabela de Drops Dinâmicos (Loot).
@@ -321,11 +299,6 @@ export async function evaluateLootDrop(client, guildId, channelId, userId, usern
     
     // Se a rolagem for menor ou igual à chance (ex: 0.04 <= 0.05) -> VENCEU!
     if (roll <= loot.chance) {
-      // Aplica controle de cooldowns
-      if (!checkAndApplyCooldown(userId, loot.name)) {
-        addLog('Loot', `⏳ Cooldown ativo para ${username} na conquista "${loot.name}". Drop cancelado.`);
-        continue;
-      }
 
       const isDuplicate = earnedBadgeIds.includes(loot.name);
       const timesEarned = existingBadges.filter(b => b.badge_name === loot.name).length + 1;
@@ -360,6 +333,21 @@ export async function evaluateLootDrop(client, guildId, channelId, userId, usern
  */
 async function announceLootDrop(client, guildId, channelId, userId, loot, isDuplicate = false, timesEarned = 1) {
   try {
+    // Cooldown de notificações: silencia o anúncio se o usuário ganhou algo recentemente
+    const now = Date.now();
+    const lastAnnounce = lastAnnounceTimes.get(userId) || 0;
+    if (now - lastAnnounce < ANNOUNCE_COOLDOWN_MS) {
+      addLog('Loot', `🔕 Notificação suprimida para ${userId} (cooldown de anúncio ativo). Drop salvo silenciosamente.`);
+      // Ainda sincroniza o nickname mesmo sem anunciar
+      const guild = await client.guilds.fetch(guildId).catch(() => null);
+      if (guild) {
+        const member = await guild.members.fetch(userId).catch(() => null);
+        if (member) await syncMemberNicknameBadges(member).catch(() => null);
+      }
+      return;
+    }
+    lastAnnounceTimes.set(userId, now);
+
     const guild = await client.guilds.fetch(guildId);
     if (!guild) return;
 
