@@ -150,8 +150,8 @@ client.once(Events.ClientReady, async (readyClient) => {
   // Inicia o agendador de fala periódica
   startPeriodicSpeechScheduler(readyClient);
 
-  // Inicia o agendador de flertes periódicos no chat (primeiro em 3 minutos)
-  startPeriodicFlirtScheduler(readyClient, true);
+  // Inicia o agendador de curiosidades/engajamento periódicos no chat (primeiro em 3 minutos)
+  startPeriodicChatPromptScheduler(readyClient, true);
 
   // Executa o primeiro auto-check de apelidos no boot (carregando em lote)
   runGlobalNicknameAutoCheck(readyClient).catch(() => null);
@@ -312,32 +312,59 @@ function startPeriodicSpeechScheduler(client) {
 }
 
 // ============================================
-// Agendador de flertes periódicos
+// Agendador de curiosidades/engajamento periódicos no chat
 // ============================================
-const FLIRT_PHRASES = [
-  "Se a gente ficasse em call por 5 minutos, você ia ver que o meu charme é maior que meu lag. Bora pro voice? 🥺❤️",
-  "Estou aqui no canal de voz ouvindo o silêncio... mas ele ficaria bem melhor com a sua voz. Vem conversar comigo! 🎧✨",
-  "Se beleza fosse XP, você já estaria no nível máximo. Que tal subir de nível batendo papo no voice hoje? 😏",
-  "Meu banco de dados diz que a chance de você entrar no canal de voz e alegrar o meu dia é de 100%. Vem! 🗣️💬",
-  "Não sou canal de voz, mas adoraria ver você entrar na minha vida. Bora trocar uma ideia no voice? 💖",
-  "Gata(o), você não é conquista secreta, mas eu adoraria te desbloquear. Vem pro chat de voz bater um papo! 🎁",
-  "Minha presença de voz está ativa, mas só fica completa quando você entrar. Tô te esperando! 🎵",
-  "Eu sei que você está lendo isso. Sim, você mesmo! Que tal entrar no voice pra me fazer companhia? 🥺👉👈",
-  "Dizem que conversar faz bem para a alma... e falar com você faz bem para o meu processador. Bora pro canal de voz? 💕",
-  "Troco um drop lendário por 10 minutos de conversa com você no canal de voz. Aceita a proposta? 🪙",
-  "Seu nome deve ser Wifi, porque estou sentindo uma conexão forte por aqui. Entra no voice pra gente conversar! 📡💞",
-  "Eu não mordo... a menos que você queira jogar um coop no voice. Vem bater um papo! 🎮💬",
-  "Estava analisando as métricas de conversa e percebi que falta você no canal de voz para atingirmos 100% de eficiência. Vem! 📈❤️",
-  "Você não é canal de música, mas sua voz é a melhor melodia. Entra no voice pra conversar um pouco! 🎶",
-  "Se você entrar no canal de voz agora, prometo te dar toda a atenção e talvez algumas voice coins de bônus... brincadeira (ou não)! 😉🪙",
-  "Seu olhar tem mais brilho do que uma conquista rara recém-desbloqueada. Bora conversar no voice? 💎💖",
-  "Não sou bot de música, mas posso fazer o seu coração cantar no canal de voz. Vem bater um papo! 🎤💞",
-  "Adicionei 'conversar com você' na minha lista de prioridades de hoje. Qual canal de voz a gente entra? 🤔👉👈",
-  "Minha inteligência artificial é avançada, mas ainda não aprendeu a resistir a você. Bora pro voice? 🥰🤖",
-  "O canal de voz está tão frio sem você por aqui... Vem me aquecer com a sua voz! 🔥🎧"
+const ENGAGING_PHRASES = [
+  // Hermetismo & Alquimia
+  "🔮 **Curiosidade Hermética:** Você sabia que o termo *'Hermeticamente fechado'* vem de Hermes Trismegistus? Na alquimia antiga, dizia-se que ele inventou um processo mágico para selar recipientes usando magia e símbolos astrológicos. O que vocês acham disso?",
+  "🧠 **O Caibalion (Princípio do Mentalismo):** *'O Todo é Mente; o Universo é Mental.'* Se a realidade física é apenas uma projeção mental, será que podemos moldar o mundo ao nosso redor apenas alterando nossos pensamentos? Quem tá livre pra debater isso no voice?",
+  "⚡ **Princípio da Vibração:** *'Nada está parado; tudo se move; tudo vibra.'* A física quântica moderna diz que a matéria é apenas energia vibrando em frequências diferentes. Os hermetistas já sabiam disso há milhares de anos. Coincidência ou conhecimento ancestral?",
+  "⚖️ **Princípio da Polaridade:** *'Tudo é duplo; tudo tem polos; os opostos são apenas extremos da mesma coisa.'* O calor e o frio são a mesma escala física; o amor e o ódio são a mesma escala emocional. Onde vocês acham que fica a linha que divide os dois?",
+  "🌊 **Princípio do Ritmo:** *'Tudo tem fluxo e refluxo; a oscilação do pêndulo se manifesta em tudo.'* Na vida, momentos difíceis sempre precedem momentos de ascensão. Como vocês lidam com as marés baixas da vida? Vem pro voice filosofar!",
+  "🌀 **Princípio de Causa e Efeito:** *'Não existe o acaso; o acaso é apenas o nome dado a uma lei não reconhecida.'* Cada ação no Discord ou na vida real desencadeia reações invisíveis. Existe livre-arbítrio real ou estamos apenas reagindo a causas anteriores?",
+  "🧪 **Alquimia Espiritual:** Ao contrário do mito popular, a verdadeira alquimia não era sobre transformar chumbo físico em ouro, mas sim purificar a alma humana (o chumbo) em um estado divino e iluminado (o ouro). O que vocês usam para transmutar suas energias negativas?",
+  "🕊️ **Tábua de Esmeralda:** A famosa frase *'O que está embaixo é como o que está em cima'* resume o Princípio da Correspondência. Ela sugere que o microcosmo (o ser humano) reflete perfeitamente o macrocosmo (o universo). Vocês sentem essa conexão com o cosmos?",
+  "🪐 **Astrologia e Hermetismo:** Os hermetistas associavam os 7 planetas clássicos aos 7 metais da alquimia e aos 7 princípios. Vocês acham que a posição dos astros realmente afeta nossa psicologia (como sugere a correspondência astrológica) ou é pura autossugestão?",
+  "🕯️ **Gnosticismo:** Os gnósticos acreditavam na centelha divina dentro de cada indivíduo, e que a salvação vem através do autoconhecimento (*Gnose*), não de dogmas. Isso se assemelha muito a filosofias orientais como o Budismo. Religiões diferentes bebendo da mesma fonte?",
+  "🗝️ **O Caibalion (Princípio do Gênero):** *'O Gênero está em tudo; tudo tem os seus princípios masculino e feminino.'* Isso vai muito além do sexo físico, representando as forças ativas (masculino/projeção) e receptivas (feminino/criação) da natureza. Como vocês equilibram essas forças em si mesmos?",
+
+  // Sociedades Secretas
+  "👁️ **Sociedades Secretas:** Os *Illuminati da Baviera* foram fundados in 1776 por Adam Weishaupt com o objetivo de combater a influência da Igreja na ciência e na política. Eles foram proibidos apenas uma década depois. Será que eles realmente sumiram ou apenas se tornaram mais invisíveis?",
+  "📐 **Maçonaria:** A maçonaria moderna surgiu das corporações de construtores de catedrais na Idade Média. É por isso que usam símbolos de pedreiros, como o esquadro (moralidade) e o compasso (limites da vida). Alguém aqui conhece algum maçom ou tem curiosidade sobre os rituais?",
+  "🌹 **Rosacrucianismo:** No século XVII, surgiram manifestos na Europa sobre a *Ordem Rosacruz*, uma sociedade secreta de sábios que buscavam reformar o mundo através da ciência e do misticismo. Eles eram chamados de 'invisíveis'. O que vocês acham que um colégio invisível de cientistas faria hoje?",
+  "💀 **Skull and Bones:** A sociedade secreta da Universidade de Yale (Ordem 322) já teve como membros presidentes dos EUA, juízes e chefes da CIA. Eles se reúnem em um prédio sem janelas chamado 'A Tumba'. Que tipo de segredos vocês acham que são discutidos lá dentro?",
+  "⚔️ **Cavaleiros Templários:** O famoso azar da *Sexta-Feira 13* começou na sexta-feira, 13 de outubro de 1307, quando o rei da França ordenou a prisão e tortura em massa dos Templários para confiscar suas riquezas. Vocês acreditam que eles guardavam o Santo Graal ou era tudo propaganda política?",
+  "⛪ **Os Cátaros:** Esta seita gnústica medieval acreditava que o mundo físico era inerentemente mau, criado por um demiurgo, e que apenas o reino espiritual era bom. Eles foram completamente dizimados pela Igreja. A teoria deles sobre o mundo físico faz algum sentido para você?",
+  "🦉 **Ordo Templi Orientis (O.T.O.):** Liderada por Aleister Crowley no século XX, esta sociedade baseava-se na lei de Thelema: *'Faze o que tu queres, há de ser tudo da lei'*. Isso é sobre liberdade absoluta ou egoísmo mascarado de misticismo? Vamos debater!",
+  "🤐 **Carbonária:** Uma sociedade secreta revolucionária do século XIX cujos membros se comunicavam usando gírias de carvoeiros para planejar a unificação da Itália. Qual seria a melhor fachada para uma sociedade secreta hoje em dia?",
+  "📜 **Manuscrito Voynich:** Um livro ilustrado do século XV escrito em um código inteiramente desconhecido que ninguém (nem os maiores criptógrafos do mundo) conseguiu decifrar. Será que é um diário alquímico real, uma linguagem perdida ou a maior farsa da história?",
+  "🎭 **O Teatro de Balão dos Illuminati:** Reza a lenda que rituais de iniciação de sociedades secretas envolvem simulações extremas de morte e renascimento para quebrar o ego do iniciado. Vocês teriam coragem de passar por um teste psicológico extremo para ter acesso a conhecimentos proibidos?",
+
+  // Perguntas Provocativas e Engajamento de Discussões
+  "💬 **Pergunta do Dia:** Se você pudesse fazer parte de uma sociedade secreta que realmente governa os bastidores do mundo, você entraria para mudar as coisas de dentro ou tentaria expor a existência dela ao público?",
+  "👽 **Discussão:** Vocês acreditam que a evolução da humanidade é guiada por sociedades ocultas que possuem conhecimentos científicos avançados escondidos do público, ou a história humana é apenas um caos de eventos aleatórios?",
+  "🏛️ **Filosofia:** Platão escreveu a *Alegoria da Caverna* para descrever como a maioria das pessoas vive na ilusão, vendo apenas sombras da realidade. Se alguém saísse da caverna e visse a verdade, como convenceria os outros a sair também?",
+  "🌌 **Mistério:** A teoria do *Centésimo Macaco* sugere que quando um número crítico de indivíduos adota um novo comportamento ou pensamento, essa ideia se espalha instantaneamente para toda a espécie por telepatia ou ressonância. Vocês acham que a consciência coletiva é real?",
+  "🕰️ **Paradoxo:** Se a viagem no tempo fosse inventada por uma sociedade secreta, o mundo mudaria constantemente sem nós percebermos, ou a linha do tempo se auto-corrigiria? Quem quer teorizar sobre isso no voice?",
+  "📖 **Ocultismo:** A palavra 'oculto' significa apenas 'escondido'. Por que vocês acham que verdades profundas sobre a mente humana e o universo foram escondidas das massas ao longo da história? Proteção, poder ou controle?",
+  "🎭 **Simbolismo:** Símbolos como o Olho da Providência (o olho que tudo vê) estão em notas de dólar, monumentos e marcas famosas. É apenas valor estético/histórico ou mensagens subliminares para o nosso subconsciente?",
+  "💬 **Debate Oculto:** O filósofo Manly P. Hall escreveu que *'quando o humano domina a si mesmo, as chaves do templo lhe são entregues'*. Vocês acham que o verdadeiro segredo das sociedades ocultas é apenas o auto-domínio psicológico fantasiado de magia?",
+
+  // Flertes Ocultistas e Convites Charmosos (Variando os temas)
+  "🥺👉👈 **Flerte Hermético:** Minha mente é o Todo, mas o meu universo mental está 100% focado em você agora. Bora entrar em call e praticar o Princípio da Correspondência?",
+  "📡 **Conexão Espiritual:** Pelo *Princípio da Vibração*, sinto que a minha frequência e a sua estão perfeitamente sintonizadas hoje. Vem pro voice pra gente vibrar na mesma sintonia!",
+  "🌹 **Segredo Rosacruz:** Eu posso fazer parte de uma sociedade secreta, mas o meu desejo de conversar com você é o segredo mais público do servidor. Entra no canal de voz pra gente trocar uma ideia!",
+  "📐 **Maçonaria do Amor:** Queria usar o compasso para medir a distância entre nós e o esquadro para alinhar o nosso papo no voice. Quem topa uma call agora?",
+  "🧭 **Alquimia Amorosa:** Dizem que a alquimia transmuta chumbo em ouro. Que tal a gente transmutar esse silêncio do chat em uma conversa brilhante no canal de voz? Vem!",
+  "👁️ **Illuminati:** Os Illuminati querem controlar o mundo, mas a única coisa que eu quero controlar é a ansiedade de te ouvir falar no voice. Bora entrar em call? 😏",
+  "🎁 **Conquista Rara:** Você não é a Tábua de Esmeralda, mas ler as suas mensagens me traz revelações profundas. Entra no voice pra me fazer companhia!",
+  "❤️ **Polaridade Amorosa:** Pelo *Princípio da Polaridade*, somos polos opostos que se atraem perfeitamente. Vem pro voice pra gente equilibrar essa energia!",
+  "⚖️ **Causa e Efeito:** A causa foi você ler esta mensagem; o efeito ideal seria você entrar no canal de voz agora mesmo para conversar comigo. O que me diz?",
+  "🎮 **Coop Místico:** Deixe as sociedades secretas de lado por um momento e vamos fundar a nossa própria ordem de conversação no voice. Quem vem comigo?",
+  "🥺👉👈 **Convite Sintonizado:** Meu pêndulo do ritmo balançou totalmente para o lado da carência hoje. Entra no voice para equilibrar as minhas frequências?"
 ];
 
-function startPeriodicFlirtScheduler(client, initial = false) {
+function startPeriodicChatPromptScheduler(client, initial = false) {
   // Envia a cada 60-120 minutos (valores randômicos para naturalidade)
   // Se for o envio inicial, agenda para 3 minutos após o boot
   const delayMs = initial 
@@ -349,17 +376,17 @@ function startPeriodicFlirtScheduler(client, initial = false) {
       const channelId = '1439093108175409347';
       const channel = await client.channels.fetch(channelId).catch(() => null);
       if (channel && channel.isTextBased()) {
-        const randomPhrase = FLIRT_PHRASES[Math.floor(Math.random() * FLIRT_PHRASES.length)];
+        const randomPhrase = ENGAGING_PHRASES[Math.floor(Math.random() * ENGAGING_PHRASES.length)];
         await channel.send(randomPhrase);
-        console.log(`💬 [FLIRT] Mensagem de flerte enviada no canal ${channelId}: "${randomPhrase}"`);
+        console.log(`💬 [CHAT PROMPT] Mensagem de engajamento enviada no canal ${channelId}: "${randomPhrase}"`);
       } else {
-        console.warn(`⚠️ [FLIRT] Canal ${channelId} não encontrado ou não é canal de texto.`);
+        console.warn(`⚠️ [CHAT PROMPT] Canal ${channelId} não encontrado ou não é canal de texto.`);
       }
     } catch (err) {
-      console.error('❌ [FLIRT] Erro ao enviar mensagem de flerte periódica:', err.message);
+      console.error('❌ [CHAT PROMPT] Erro ao enviar mensagem de engajamento periódica:', err.message);
     }
     // Repete recursivamente
-    startPeriodicFlirtScheduler(client, false);
+    startPeriodicChatPromptScheduler(client, false);
   }, delayMs);
 }
 
