@@ -667,6 +667,8 @@ export async function evaluatePresenceLootDrop(client, guildId, channelId, userI
   // Ignora chamadas muito curtas (menos de 60 segundos)
   if (presenceSeconds < 60) return;
 
+  addLog('Loot', `🔍 Avaliando presença para ${username} (Presença: ${Math.floor(presenceSeconds)}s | Fala: ${Math.floor(speakingSeconds)}s | Câmera: ${Math.floor(cameraSeconds)}s)`);
+
   const existingBadges = await getUserBadges(userId);
   const earnedBadgeIds = existingBadges.map(b => b.badge_name);
 

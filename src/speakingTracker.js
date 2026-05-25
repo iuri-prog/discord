@@ -10,6 +10,11 @@ import { evaluateLootDrop } from './utils/lootSystem.js';
 import { climateState } from './climate.js';
 import { addLog } from './utils/debugLogger.js';
 
+let client = null;
+export function setSpeakingTrackerClient(cli) {
+  client = cli;
+}
+
 async function processEconomy(userId, username, elapsed) {
   // Chance de ganhar moedas para não perder frações em falas curtas (2 moedas por minuto)
   const expectedCoins = elapsed * (2 / 60);
@@ -63,18 +68,14 @@ export function startSpeaking(guildId, userId, username) {
   });
 
   // Auto-cura de presença: se por algum motivo o usuário não estiver sendo rastreado
-  // na tabela de presença, tenta iniciar o rastreamento recuperando o canal dele do Discord.
-  if (!isTracking(userId)) {
-    import('./index.js').then(({ client }) => {
-      const guild = client.guilds.cache.get(guildId);
-      const member = guild?.members.cache.get(userId);
-      const channelId = member?.voice?.channelId;
-      if (channelId) {
-        startPresenceTracking(userId, username, channelId);
-      }
-    }).catch(err => {
-      console.error('❌ [AUTO-CURA] Erro ao recuperar canal de voz do usuário em startSpeaking:', err.message);
-    });
+  // na tabela de presença, tenta iniciar o rastreamento recuperando o canal dele do Discord usando o client injetado.
+  if (!isTracking(userId) && client) {
+    const guild = client.guilds.cache.get(guildId);
+    const member = guild?.members.cache.get(userId);
+    const channelId = member?.voice?.channelId;
+    if (channelId) {
+      startPresenceTracking(userId, username, channelId);
+    }
   }
 }
 
@@ -103,28 +104,19 @@ export async function stopSpeaking(guildId, userId) {
     
     // Tenta dropar um Loot!
     let channelId = getSessionChannelId(userId);
-    if (!channelId) {
+    if (!channelId && client) {
       // Tenta recuperar canal do Discord se ainda estiver nulo (auto-cura de fallback)
-      try {
-        const guild = (await import('./index.js')).client.guilds.cache.get(guildId);
-        const member = guild?.members.cache.get(userId);
-        channelId = member?.voice?.channelId;
-        if (channelId) {
-          startPresenceTracking(userId, session.username, channelId);
-        }
-      } catch (err) {
-        console.error('❌ [AUTO-CURA] Falha no fallback de stopSpeaking:', err.message);
+      const guild = client.guilds.cache.get(guildId);
+      const member = guild?.members.cache.get(userId);
+      channelId = member?.voice?.channelId;
+      if (channelId) {
+        startPresenceTracking(userId, session.username, channelId);
       }
     }
 
-    if (channelId) {
-      // Importa dinamicamente para evitar dependência circular na inicialização de comandos
-      import('./index.js').then(({ client }) => {
-        evaluateLootDrop(client, guildId, channelId, userId, session.username, elapsed).catch(err => {
-          console.error('❌ Erro no evaluateLootDrop:', err.message);
-        });
-      }).catch(err => {
-        console.error('❌ Erro ao importar client dinamicamente:', err.message);
+    if (channelId && client) {
+      evaluateLootDrop(client, guildId, channelId, userId, session.username, elapsed).catch(err => {
+        console.error('❌ Erro no evaluateLootDrop:', err.message);
       });
     }
   }

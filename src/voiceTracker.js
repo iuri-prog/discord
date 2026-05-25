@@ -7,6 +7,11 @@
 import { addPresenceTime, saveVoiceSession } from './database.js';
 import { addLog } from './utils/debugLogger.js';
 
+let client = null;
+export function setVoiceTrackerClient(cli) {
+  client = cli;
+}
+
 /**
  * Map em memória para rastrear timestamps de entrada.
  * Chave: userId | Valor: { originalJoinedAt: number, lastFlushedAt: number, username: string, channelId: string, speakingSeconds: number }
@@ -85,8 +90,8 @@ export async function stopPresenceTracking(userId) {
     `Presença total: ${Math.floor(totalSessionPresence)}s | Fala total: ${Math.floor(session.speakingSeconds || 0)}s | Câmera total: ${Math.floor(session.cameraSeconds || 0)}s`
   );
 
-  // Importa dinamicamente o client do Discord e o motor de loot para avaliar conquistas de presença ao sair
-  import('./index.js').then(async ({ client }) => {
+  // Avalia conquistas de presença ao sair usando o client injetado
+  if (client) {
     try {
       const channel = client.channels.cache.get(session.channelId) || await client.channels.fetch(session.channelId).catch(() => null);
       if (channel && channel.guild) {
@@ -108,9 +113,9 @@ export async function stopPresenceTracking(userId) {
     } catch (err) {
       console.error('❌ Erro ao processar drop de presença no stopPresenceTracking:', err.message);
     }
-  }).catch(err => {
-    console.error('❌ Erro ao importar client no stopPresenceTracking:', err.message);
-  });
+  } else {
+    console.error('❌ [PRESENÇA] Client do Discord não definido no stopPresenceTracking');
+  }
 
   return totalSessionPresence;
 }
@@ -171,8 +176,8 @@ export async function flushAllPresence() {
       currentCameraSeconds += (now - session.cameraStartedAt) / 1000;
     }
 
-    // Avalia conquistas de presença em tempo real (durante a chamada)
-    import('./index.js').then(async ({ client }) => {
+    // Avalia conquistas de presença em tempo real (durante a chamada) usando o client injetado
+    if (client) {
       try {
         const channel = client.channels.cache.get(session.channelId) || await client.channels.fetch(session.channelId).catch(() => null);
         if (channel && channel.guild) {
@@ -192,7 +197,7 @@ export async function flushAllPresence() {
       } catch (err) {
         console.error(`❌ Erro ao avaliar conquistas de presença periódica para ${session.username}:`, err.message);
       }
-    }).catch(() => null);
+    }
   }
 
   if (presenceSessions.size > 0) {

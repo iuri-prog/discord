@@ -22,10 +22,12 @@ import {
   isTracking,
   flushAllPresence,
   stopAllPresenceTracking,
+  setVoiceTrackerClient,
 } from './voiceTracker.js';
 import {
   flushAllSpeaking,
   stopAllSpeaking,
+  setSpeakingTrackerClient,
 } from './speakingTracker.js';
 import {
   syncVoiceChannels,
@@ -63,6 +65,10 @@ export const client = new Client({
     GatewayIntentBits.MessageContent,   // Permissão para ler o conteúdo das mensagens
   ],
 });
+
+// Injeta a instância do client nos rastreadores para evitar dependências circulares
+setVoiceTrackerClient(client);
+setSpeakingTrackerClient(client);
 
 // ============================================
 // 2. Registra os comandos em uma Collection
