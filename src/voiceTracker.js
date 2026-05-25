@@ -85,7 +85,7 @@ export async function stopPresenceTracking(userId) {
   // Importa dinamicamente o client do Discord e o motor de loot para avaliar conquistas de presença ao sair
   import('./index.js').then(async ({ client }) => {
     try {
-      const channel = await client.channels.fetch(session.channelId).catch(() => null);
+      const channel = client.channels.cache.get(session.channelId) || await client.channels.fetch(session.channelId).catch(() => null);
       if (channel && channel.guild) {
         const { evaluatePresenceLootDrop } = await import('./utils/lootSystem.js');
         await evaluatePresenceLootDrop(
@@ -171,7 +171,7 @@ export async function flushAllPresence() {
     // Avalia conquistas de presença em tempo real (durante a chamada)
     import('./index.js').then(async ({ client }) => {
       try {
-        const channel = await client.channels.fetch(session.channelId).catch(() => null);
+        const channel = client.channels.cache.get(session.channelId) || await client.channels.fetch(session.channelId).catch(() => null);
         if (channel && channel.guild) {
           const { evaluatePresenceLootDrop } = await import('./utils/lootSystem.js');
           await evaluatePresenceLootDrop(

@@ -344,12 +344,20 @@ async function announceLootDrop(client, guildId, channelId, userId, loot, isDupl
     }
 
     let sentMessage = null;
-    if (channel && channel.isTextBased()) { // A partir de certas atualizações, canais de voz têm chat de texto associado
-      sentMessage = await channel.send({ content: messageContent });
-    } else {
-      // Se não conseguir mandar no chat do canal de voz, pode mandar no canal do sistema (systemChannel)
-      if (guild.systemChannel) {
+    try {
+      if (channel && channel.isTextBased()) {
+        sentMessage = await channel.send({ content: messageContent });
+      } else if (guild.systemChannel) {
         sentMessage = await guild.systemChannel.send({ content: messageContent });
+      }
+    } catch (sendError) {
+      console.warn(`⚠️ [LOOT SYSTEM] Falha ao enviar mensagem no canal de voz (${channelId}): ${sendError.message}. Tentando canal do sistema.`);
+      try {
+        if (guild.systemChannel) {
+          sentMessage = await guild.systemChannel.send({ content: messageContent });
+        }
+      } catch (sysErr) {
+        console.error(`❌ [LOOT SYSTEM] Falha ao enviar mensagem no canal do sistema também:`, sysErr.message);
       }
     }
 
@@ -363,7 +371,11 @@ async function announceLootDrop(client, guildId, channelId, userId, loot, isDupl
     }
 
     // Sincronizar o nickname automaticamente com as conquistas do banco
-    await syncMemberNicknameBadges(member);
+    try {
+      await syncMemberNicknameBadges(member);
+    } catch (nickErr) {
+      console.error(`❌ [LOOT SYSTEM] Erro ao sincronizar nickname do membro após o drop:`, nickErr.message);
+    }
 
     // Efeito sonoro desativado a pedido do usuário (remover som de passar de nível)
     /*
