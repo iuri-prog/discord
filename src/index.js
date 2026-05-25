@@ -58,6 +58,8 @@ export const client = new Client({
     GatewayIntentBits.Guilds,           // Acesso a servidores
     GatewayIntentBits.GuildVoiceStates,  // Eventos de voz (join/leave/mute/deaf)
     GatewayIntentBits.GuildMembers,      // Acesso a membros (para nomes)
+    GatewayIntentBits.GuildMessages,    // Acesso a mensagens de texto (para comandos $)
+    GatewayIntentBits.MessageContent,   // Permissão para ler o conteúdo das mensagens
   ],
 });
 
@@ -269,6 +271,143 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await interaction.editReply(reply);
     } else {
       await interaction.reply(reply);
+    }
+  }
+});
+
+// ============================================
+// 5.5 Evento: Mensagem de Texto (Suporte a comandos com $)
+// ============================================
+client.on(Events.MessageCreate, async (message) => {
+  // Ignora mensagens de bots ou fora de servidores
+  if (message.author.bot || !message.guild) return;
+
+  // Verifica se a mensagem começa com "$"
+  if (!message.content.startsWith('$')) return;
+
+  const args = message.content.slice(1).trim().split(/\s+/);
+  const commandName = args.shift().toLowerCase();
+
+  const command = client.commands.get(commandName);
+  if (!command) return; // Ignora se o comando não existe
+
+  // Cria um objeto mock para simular a Interaction do Discord
+  const mockInteraction = {
+    guildId: message.guildId,
+    guild: message.guild,
+    channelId: message.channelId,
+    channel: message.channel,
+    user: message.author,
+    member: message.member,
+    deferred: false,
+    replied: false,
+    sentMessage: null,
+
+    isChatInputCommand: () => true,
+
+    deferReply: async () => {
+      mockInteraction.deferred = true;
+      await message.channel.sendTyping().catch(() => null);
+    },
+
+    reply: async (payload) => {
+      const response = typeof payload === 'string' ? { content: payload } : payload;
+      const msg = await message.channel.send(response);
+      mockInteraction.replied = true;
+      mockInteraction.sentMessage = msg;
+      return msg;
+    },
+
+    editReply: async (payload) => {
+      const response = typeof payload === 'string' ? { content: payload } : payload;
+      if (mockInteraction.sentMessage) {
+        return await mockInteraction.sentMessage.edit(response);
+      } else {
+        const msg = await message.channel.send(response);
+        mockInteraction.sentMessage = msg;
+        mockInteraction.replied = true;
+        return msg;
+      }
+    },
+
+    options: {
+      getSubcommand: () => {
+        if (commandName === 'loja') {
+          return args[0]?.toLowerCase() || null;
+        }
+        return null;
+      },
+
+      getUser: (name) => {
+        const searchArgs = (commandName === 'loja') ? args.slice(1) : args;
+
+        // 1. Procura por menção direta
+        if (message.mentions.users.size > 0) {
+          return message.mentions.users.first();
+        }
+
+        // 2. Procura por ID numérico
+        for (const arg of searchArgs) {
+          if (/^\d{17,19}$/.test(arg)) {
+            const user = message.client.users.cache.get(arg);
+            if (user) return user;
+          }
+        }
+
+        // 3. Procura por nome/apelido no servidor
+        for (const arg of searchArgs) {
+          if (!arg) continue;
+          const member = message.guild.members.cache.find(m => 
+            m.user.username.toLowerCase().includes(arg.toLowerCase()) || 
+            (m.nickname && m.nickname.toLowerCase().includes(arg.toLowerCase()))
+          );
+          if (member) return member.user;
+        }
+
+        // Fallback padrão se for o autor da mensagem
+        if (name === 'usuario' && commandName !== 'clonar' && commandName !== 'repetir') {
+          return message.author;
+        }
+        return null;
+      },
+
+      getString: (name) => {
+        if (commandName === 'falar') {
+          if (name === 'mensagem') {
+            const firstArg = args[0]?.toLowerCase();
+            if (firstArg === 'la' || firstArg === 'pt-br') {
+              return args.slice(1).join(' ').substring(0, 200);
+            }
+            return args.join(' ').substring(0, 200);
+          }
+          if (name === 'idioma') {
+            const firstArg = args[0]?.toLowerCase();
+            if (firstArg === 'la') return 'la';
+            if (firstArg === 'pt-br') return 'pt-BR';
+            return null;
+          }
+        }
+
+        if (commandName === 'clonar') {
+          if (name === 'frase') {
+            return args.slice(1).join(' ').substring(0, 200);
+          }
+        }
+
+        return null;
+      }
+    }
+  };
+
+  try {
+    await command.execute(mockInteraction);
+  } catch (error) {
+    console.error(`❌ Erro ao executar $${commandName} via texto:`, error);
+    const errorPayload = { content: '❌ Ocorreu um erro ao executar este comando.' };
+    if (mockInteraction.deferred || mockInteraction.replied) {
+      await mockInteraction.editReply(errorPayload).catch(() => null);
+    } else {
+      await mockInteraction.reply(errorPayload).catch(() => null);
     }
   }
 });
