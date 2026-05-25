@@ -96,7 +96,8 @@ export async function stopPresenceTracking(userId) {
           session.username,
           totalSessionPresence,
           session.speakingSeconds || 0,
-          session.cameraSeconds || 0
+          session.cameraSeconds || 0,
+          session.thresholdsChecked
         );
       } else {
         console.warn(`⚠️ [PRESENÇA] Canal ${session.channelId} não encontrado no stopPresenceTracking para ${session.username}`);
@@ -157,10 +158,42 @@ export async function flushAllPresence() {
       // Atualiza apenas a data do último flush
       session.lastFlushedAt = now;
     }
+
+    // Calcula tempo de presença e de câmera acumulados na sessão ativa atual
+    const currentPresenceSeconds = (now - session.originalJoinedAt) / 1000;
+    const currentSpeakingSeconds = session.speakingSeconds || 0;
+    
+    let currentCameraSeconds = session.cameraSeconds || 0;
+    if (session.cameraStartedAt) {
+      currentCameraSeconds += (now - session.cameraStartedAt) / 1000;
+    }
+
+    // Avalia conquistas de presença em tempo real (durante a chamada)
+    import('./index.js').then(async ({ client }) => {
+      try {
+        const channel = await client.channels.fetch(session.channelId).catch(() => null);
+        if (channel && channel.guild) {
+          const { evaluatePresenceLootDrop } = await import('./utils/lootSystem.js');
+          await evaluatePresenceLootDrop(
+            client,
+            channel.guild.id,
+            channel.id,
+            userId,
+            session.username,
+            currentPresenceSeconds,
+            currentSpeakingSeconds,
+            currentCameraSeconds,
+            session.thresholdsChecked
+          );
+        }
+      } catch (err) {
+        console.error(`❌ Erro ao avaliar conquistas de presença periódica para ${session.username}:`, err.message);
+      }
+    }).catch(() => null);
   }
 
   if (presenceSessions.size > 0) {
-    console.log(`💾 [PRESENÇA] Flush periódico: ${presenceSessions.size} sessões salvas.`);
+    console.log(`💾 [PRESENÇA] Flush periódico e avaliação em tempo real: ${presenceSessions.size} sessões processadas.`);
   }
 }
 

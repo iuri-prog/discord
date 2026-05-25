@@ -555,9 +555,9 @@ export async function syncNicknameWithPreloadedData(member, existingBadges, rari
 
 /**
  * Tenta dropar um loot de presença para o usuário baseado na duração da chamada.
- * Executada apenas quando o usuário sai do canal de voz.
+ * Executada periodicamente ou quando o usuário sai do canal de voz.
  */
-export async function evaluatePresenceLootDrop(client, guildId, channelId, userId, username, presenceSeconds, speakingSeconds, cameraSeconds = 0) {
+export async function evaluatePresenceLootDrop(client, guildId, channelId, userId, username, presenceSeconds, speakingSeconds, cameraSeconds = 0, thresholdsChecked = null) {
   // Ignora chamadas muito curtas (menos de 60 segundos)
   if (presenceSeconds < 60) return;
 
@@ -567,6 +567,7 @@ export async function evaluatePresenceLootDrop(client, guildId, channelId, userI
   // Filtra as conquistas elegíveis do tipo presence
   const eligibleLoots = LOOT_TABLE.filter(loot => 
     loot.type === 'presence' &&
+    (!thresholdsChecked || !thresholdsChecked.has(loot.id)) && // Ignora se já ganhou nesta sessão
     loot.condition(presenceSeconds, userId, speakingSeconds, cameraSeconds) &&
     !pendingAwards.has(`${userId}:${loot.name}`)
   );
@@ -585,6 +586,11 @@ export async function evaluatePresenceLootDrop(client, guildId, channelId, userI
       const cacheKey = `${userId}:${loot.name}`;
       pendingAwards.add(cacheKey);
       setTimeout(() => pendingAwards.delete(cacheKey), 60000);
+
+      // Registra que a conquista foi ganha nesta sessão para evitar duplicidade em tempo real
+      if (thresholdsChecked) {
+        thresholdsChecked.add(loot.id);
+      }
 
       // Salva no banco de dados
       await awardBadge(userId, username, loot.icon, loot.name, loot.tag);
