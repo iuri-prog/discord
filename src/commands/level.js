@@ -92,86 +92,90 @@ function getLevelEmbedsAndComponents(authorId, targetUser, metrics, badges, best
     bestFriendDisplay = `<@${bestFriend.id}>\n${hearts} **${status}**\n*(Juntos por \`${timeTogether}\`)*`;
   }
 
-  const embed = new EmbedBuilder()
-    .setColor(0x8B5CF6)
-    .setThumbnail(targetUser.displayAvatarURL({ size: 128 }))
-    .setTimestamp();
+  const containerComponents = [];
+
+  // Top Section (Title + Avatar thumbnail as accessory)
+  containerComponents.push({
+    type: 9, // SECTION
+    components: [
+      {
+        type: 10, // Text Display
+        content: activePage === 'stats'
+          ? `# 👤 Perfil de Voz - ${targetUser.displayName || targetUser.username}`
+          : activePage === 'badges'
+            ? `# 🎒 Inventário de Conquistas`
+            : `# 🤝 Melhor Companhia`
+      }
+    ],
+    accessory: {
+      type: 11, // THUMBNAIL
+      media: {
+        url: targetUser.displayAvatarURL({ size: 128, extension: 'png' })
+      },
+      description: 'Avatar do usuário'
+    }
+  });
+
+  containerComponents.push({
+    type: 14, // Separator
+    divider: true,
+    spacing: 1
+  });
 
   if (activePage === 'stats') {
-    embed
-      .setTitle('👤 Perfil Completo de Voz')
-      .setDescription(`Estatísticas e nível de **${targetUser.displayName || targetUser.username}**`)
-      .addFields(
-        {
-          name: '🛡️ Patente de Voz',
-          value: `**${lvl.rank}**`,
-          inline: true,
-        },
-        {
-          name: '✨ Nível Atual',
-          value: `⚡ **Nível ${lvl.level}**`,
-          inline: true,
-        },
-        {
-          name: '🧪 XP Acumulado',
-          value: `🔮 \`${lvl.xp}\` XP total`,
-          inline: true,
-        },
-        {
-          name: '🪙 Saldo na Carteira',
-          value: `💰 \`${metrics.voice_coins || 0}\` Voice Coins`,
-          inline: true,
-        },
-        {
-          name: '📈 Progresso para o Próximo Nível',
-          value: `${progressBar}\n*(Progresso: \`${lvl.xpInCurrentLevel}\` / \`${lvl.xpNeededForNextLevel}\` XP)*`,
-          inline: false,
-        },
-        {
-          name: '🎧 Presença Total',
-          value: `\`${presenceFormatted}\``,
-          inline: true,
-        },
-        {
-          name: '🗣️ Fala Real',
-          value: `\`${speakingFormatted}\``,
-          inline: true,
-        },
-        {
-          name: '📊 Eficiência de Conversa',
-          value: efficiencyBar,
-          inline: false,
-        },
-        {
-          name: '🕐 Última Conexão',
-          value: metrics.last_connected
-            ? `<t:${Math.floor(new Date(metrics.last_connected).getTime() / 1000)}:R>`
-            : 'Nunca',
-          inline: false,
-        }
-      );
+    containerComponents.push(
+      {
+        type: 10,
+        content: `### 🛡️ Patente de Voz\n**${lvl.rank}**\n\n` +
+          `### ✨ Nível Atual\n⚡ **Nível ${lvl.level}**\n\n` +
+          `### 🧪 XP Acumulado\n🔮 \`${lvl.xp}\` XP total\n\n` +
+          `### 🪙 Saldo na Carteira\n💰 \`${metrics.voice_coins || 0}\` Voice Coins`
+      },
+      {
+        type: 14,
+        divider: true,
+        spacing: 1
+      },
+      {
+        type: 10,
+        content: `### 📈 Progresso para o Próximo Nível\n${progressBar}\n*(Progresso: \`${lvl.xpInCurrentLevel}\` / \`${lvl.xpNeededForNextLevel}\` XP)*`
+      },
+      {
+        type: 14,
+        divider: true,
+        spacing: 1
+      },
+      {
+        type: 10,
+        content: `### 🎧 Presença Total\n\`${presenceFormatted}\`\n\n` +
+          `### 🗣️ Fala Real\n\`${speakingFormatted}\`\n\n` +
+          `### 📊 Eficiência de Conversa\n${efficiencyBar}\n\n` +
+          `### 🕐 Última Conexão\n` + (metrics.last_connected ? `<t:${Math.floor(new Date(metrics.last_connected).getTime() / 1000)}:R>` : 'Nunca')
+      }
+    );
   } else if (activePage === 'badges') {
-    embed
-      .setTitle('🎒 Inventário de Conquistas')
-      .setDescription(
-        `Conquistas obtidas por **${targetUser.displayName || targetUser.username}** nos canais de voz.\n\n` +
-        badgesDisplay
-      );
+    containerComponents.push({
+      type: 10,
+      content: `Conquistas obtidas por **${targetUser.displayName || targetUser.username}** nos canais de voz.\n\n${badgesDisplay}`
+    });
   } else if (activePage === 'friend') {
-    embed
-      .setTitle('🤝 Melhor Companhia')
-      .setDescription(`Melhor companhia de call de **${targetUser.displayName || targetUser.username}**`)
-      .addFields({
-        name: '👤 Parceiro de Call',
-        value: bestFriendDisplay,
-        inline: false
-      });
+    containerComponents.push({
+      type: 10,
+      content: `### 👤 Parceiro de Call\n${bestFriendDisplay}`
+    });
   }
 
-  embed.setFooter({
-    text: `Página: ${activePage === 'stats' ? 'Estatísticas' : activePage === 'badges' ? 'Conquistas' : 'Melhor Companhia'} · Solicitado por ${targetUser.username}`,
-    iconURL: targetUser.displayAvatarURL({ size: 32 }),
-  });
+  containerComponents.push(
+    {
+      type: 14,
+      divider: true,
+      spacing: 1
+    },
+    {
+      type: 10,
+      content: `*Página: ${activePage === 'stats' ? 'Estatísticas' : activePage === 'badges' ? 'Conquistas' : 'Melhor Companhia'} · Solicitado por ${targetUser.username}*`
+    }
+  );
 
   const btnStats = new ButtonBuilder()
     .setCustomId(`level:stats:${authorId}:${targetUser.id}`)
@@ -196,7 +200,17 @@ function getLevelEmbedsAndComponents(authorId, targetUser, metrics, badges, best
 
   const row = new ActionRowBuilder().addComponents(btnStats, btnBadges, btnFriend);
 
-  return { embeds: [embed], components: [row] };
+  return {
+    flags: 32768, // IS_COMPONENTS_V2
+    components: [
+      {
+        type: 17, // CONTAINER
+        accent_color: 9133302, // 0x8B5CF6
+        components: containerComponents
+      },
+      row.toJSON()
+    ]
+  };
 }
 
 export async function execute(interaction) {
@@ -218,17 +232,42 @@ export async function execute(interaction) {
   ]);
 
   if (!metrics) {
-    const emptyEmbed = new EmbedBuilder()
-      .setColor(0x8B5CF6) // Roxo Violeta
-      .setTitle('👤 Perfil de Voz')
-      .setDescription(
-        `${targetUser} ainda não possui dados registrados.\n` +
-        `O rastreamento começa quando o usuário entra em um canal de voz.`
-      )
-      .setThumbnail(targetUser.displayAvatarURL({ size: 128 }))
-      .setTimestamp();
-
-    return interaction.editReply({ embeds: [emptyEmbed] });
+    return interaction.editReply({
+      flags: 32768,
+      components: [
+        {
+          type: 17, // CONTAINER
+          accent_color: 9133302,
+          components: [
+            {
+              type: 9, // SECTION
+              components: [
+                {
+                  type: 10,
+                  content: `# 👤 Perfil de Voz - ${targetUser.displayName || targetUser.username}`
+                }
+              ],
+              accessory: {
+                type: 11,
+                media: {
+                  url: targetUser.displayAvatarURL({ size: 128, extension: 'png' })
+                },
+                description: 'Avatar do usuário'
+              }
+            },
+            {
+              type: 14,
+              divider: true,
+              spacing: 1
+            },
+            {
+              type: 10,
+              content: `${targetUser} ainda não possui dados registrados.\nO rastreamento começa quando o usuário entra em um canal de voz.`
+            }
+          ]
+        }
+      ]
+    });
   }
 
   const payload = getLevelEmbedsAndComponents(interaction.user.id, targetUser, metrics, badges, bestFriend, 'stats');

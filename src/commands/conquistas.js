@@ -31,16 +31,19 @@ export const data = new SlashCommandBuilder()
 
 function getConquistasPayload(authorId, selectedValue, rarityStats, username, avatarURL) {
   const totalDrops = Object.values(rarityStats).reduce((sum, val) => sum + val, 0) || 1;
-  const embed = new EmbedBuilder().setTimestamp();
+  const containerComponents = [];
 
   if (!selectedValue || selectedValue === 'general') {
-    embed
-      .setColor(0x8B5CF6) // Roxo Violeta
-      .setTitle('🏆 Guia de Conquistas e Raridade (Loot Drops)')
-      .setDescription(
-        'Aqui estão todas as conquistas secretas que você pode dropar enquanto fala nos canais de voz, ' +
-        'as regras de evolução de apelido e a frequência global delas no servidor.'
-      );
+    containerComponents.push({
+      type: 10, // Text Display
+      content: `# 🏆 Guia de Conquistas e Raridade (Loot Drops)\nAqui estão todas as conquistas secretas que você pode dropar enquanto fala nos canais de voz, as regras de evolução de apelido e a frequência global delas no servidor.\n\n*Total de conquistas concedidas no servidor: \`${totalDrops}\`*`
+    });
+
+    containerComponents.push({
+      type: 14, // Separator
+      divider: true,
+      spacing: 1
+    });
 
     for (const loot of LOOT_TABLE) {
       const count = rarityStats[loot.name] || 0;
@@ -51,20 +54,14 @@ function getConquistasPayload(authorId, selectedValue, rarityStats, username, av
       const t2 = loot.evolutions[0].icon;
       const t3 = loot.evolutions[1].icon;
 
-      embed.addFields({
-        name: `${loot.icon} ${loot.name}`,
-        value: 
+      containerComponents.push({
+        type: 10, // Text Display
+        content: `### ${loot.icon} ${loot.name}\n` +
           `> 💡 **Como obter:** ${desc}\n` +
-          `> 📈 **Evolução:** ${t1} (Base) ➔ ${t2} (Tier 2, 5x) ➔ ${t3} (Tier 3, 20x)\n` +
-          `> 📊 **Frequência:** \`${count}\` drops no total (~${percentage}%)`,
-        inline: false
+          `> 📈 **Evolução:** ${t1} (Base) ➔ ${t2} (Tier 2, 5x) ➔ ${t3} (Tier 3, 10x)\n` +
+          `> 📊 **Frequência:** \`${count}\` drops (~${percentage}%)`
       });
     }
-
-    embed.setFooter({
-      text: `Total de conquistas concedidas no servidor: ${totalDrops} · Solicitado por ${username}`,
-      iconURL: avatarURL
-    });
   } else {
     const loot = LOOT_TABLE.find(l => l.id === selectedValue);
     if (loot) {
@@ -76,36 +73,32 @@ function getConquistasPayload(authorId, selectedValue, rarityStats, username, av
       const t2 = loot.evolutions[0].icon;
       const t3 = loot.evolutions[1].icon;
 
-      embed
-        .setColor(0x8B5CF6)
-        .setTitle(`${loot.icon} Detalhes da Conquista: ${loot.name}`)
-        .setDescription(`💡 **Regra de Obtenção:**\n${desc}`)
-        .addFields(
-          {
-            name: '⭐ Nível Base (Tier 1)',
-            value: `Ícone: ${t1}\nNome: **${loot.name}**\nRequisito: Obter a conquista 1 vez.`,
-            inline: true
-          },
-          {
-            name: '🌟 Nível Intermediário (Tier 2)',
-            value: `Ícone: ${t2}\nNome: **${loot.evolutions[0].name}**\nRequisito: Acumular 5 drops desta conquista.`,
-            inline: true
-          },
-          {
-            name: '🌌 Nível Divino (Tier 3)',
-            value: `Ícone: ${t3}\nNome: **${loot.evolutions[1].name}**\nRequisito: Acumular 20 drops desta conquista.`,
-            inline: true
-          },
-          {
-            name: '📊 Raridade e Estatísticas',
-            value: `🔹 Total de drops no servidor: \`${count}\` vezes.\n🔹 Frequência global: \`${percentage}%\` de todos os drops.`,
-            inline: false
-          }
-        )
-        .setFooter({
-          text: `Visualizando detalhes de ${loot.name} · Solicitado por ${username}`,
-          iconURL: avatarURL
-        });
+      containerComponents.push(
+        {
+          type: 10,
+          content: `## ${loot.icon} Detalhes da Conquista: ${loot.name}\n💡 **Regra de Obtenção:**\n${desc}`
+        },
+        {
+          type: 14,
+          divider: true,
+          spacing: 1
+        },
+        {
+          type: 10,
+          content: `### ⭐ Nível Base (Tier 1)\nÍcone: ${t1}\nNome: **${loot.name}**\nRequisito: Obter a conquista 1 vez.\n\n` +
+            `### 🌟 Nível Intermediário (Tier 2)\nÍcone: ${t2}\nNome: **${loot.evolutions[0].name}**\nRequisito: Acumular 5 drops desta conquista.\n\n` +
+            `### 🌌 Nível Divino (Tier 3)\nÍcone: ${t3}\nNome: **${loot.evolutions[1].name}**\nRequisito: Acumular 10 drops desta conquista.`
+        },
+        {
+          type: 14,
+          divider: true,
+          spacing: 1
+        },
+        {
+          type: 10,
+          content: `### 📊 Raridade e Estatísticas\n🔹 Total de drops no servidor: \`${count}\` vezes.\n🔹 Frequência global: \`${percentage}%\` de todos os drops.`
+        }
+      );
     }
   }
 
@@ -132,7 +125,17 @@ function getConquistasPayload(authorId, selectedValue, rarityStats, username, av
 
   const row = new ActionRowBuilder().addComponents(selectMenu);
 
-  return { embeds: [embed], components: [row] };
+  return {
+    flags: 32768, // IS_COMPONENTS_V2
+    components: [
+      {
+        type: 17, // CONTAINER
+        accent_color: 9133302, // 0x8B5CF6
+        components: containerComponents
+      },
+      row.toJSON()
+    ]
+  };
 }
 
 export async function execute(interaction) {
@@ -151,7 +154,9 @@ export async function execute(interaction) {
     await interaction.editReply(payload);
   } catch (error) {
     console.error('Erro ao executar /conquistas:', error);
-    await interaction.editReply('❌ Ocorreu um erro ao carregar as estatísticas das conquistas.');
+    await interaction.editReply({
+      content: '❌ Ocorreu um erro ao carregar as estatísticas das conquistas.'
+    });
   }
 }
 
