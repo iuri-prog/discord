@@ -150,6 +150,9 @@ client.once(Events.ClientReady, async (readyClient) => {
   // Inicia o agendador de fala periódica
   startPeriodicSpeechScheduler(readyClient);
 
+  // Inicia o agendador de flertes periódicos no chat (primeiro em 3 minutos)
+  startPeriodicFlirtScheduler(readyClient, true);
+
   // Executa o primeiro auto-check de apelidos no boot (carregando em lote)
   runGlobalNicknameAutoCheck(readyClient).catch(() => null);
 
@@ -305,6 +308,58 @@ function startPeriodicSpeechScheduler(client) {
     }
     // Repete recursivamente para o próximo período aleatório
     startPeriodicSpeechScheduler(client);
+  }, delayMs);
+}
+
+// ============================================
+// Agendador de flertes periódicos
+// ============================================
+const FLIRT_PHRASES = [
+  "Se a gente ficasse em call por 5 minutos, você ia ver que o meu charme é maior que meu lag. Bora pro voice? 🥺❤️",
+  "Estou aqui no canal de voz ouvindo o silêncio... mas ele ficaria bem melhor com a sua voz. Vem conversar comigo! 🎧✨",
+  "Se beleza fosse XP, você já estaria no nível máximo. Que tal subir de nível batendo papo no voice hoje? 😏",
+  "Meu banco de dados diz que a chance de você entrar no canal de voz e alegrar o meu dia é de 100%. Vem! 🗣️💬",
+  "Não sou canal de voz, mas adoraria ver você entrar na minha vida. Bora trocar uma ideia no voice? 💖",
+  "Gata(o), você não é conquista secreta, mas eu adoraria te desbloquear. Vem pro chat de voz bater um papo! 🎁",
+  "Minha presença de voz está ativa, mas só fica completa quando você entrar. Tô te esperando! 🎵",
+  "Eu sei que você está lendo isso. Sim, você mesmo! Que tal entrar no voice pra me fazer companhia? 🥺👉👈",
+  "Dizem que conversar faz bem para a alma... e falar com você faz bem para o meu processador. Bora pro canal de voz? 💕",
+  "Troco um drop lendário por 10 minutos de conversa com você no canal de voz. Aceita a proposta? 🪙",
+  "Seu nome deve ser Wifi, porque estou sentindo uma conexão forte por aqui. Entra no voice pra gente conversar! 📡💞",
+  "Eu não mordo... a menos que você queira jogar um coop no voice. Vem bater um papo! 🎮💬",
+  "Estava analisando as métricas de conversa e percebi que falta você no canal de voz para atingirmos 100% de eficiência. Vem! 📈❤️",
+  "Você não é canal de música, mas sua voz é a melhor melodia. Entra no voice pra conversar um pouco! 🎶",
+  "Se você entrar no canal de voz agora, prometo te dar toda a atenção e talvez algumas voice coins de bônus... brincadeira (ou não)! 😉🪙",
+  "Seu olhar tem mais brilho do que uma conquista rara recém-desbloqueada. Bora conversar no voice? 💎💖",
+  "Não sou bot de música, mas posso fazer o seu coração cantar no canal de voz. Vem bater um papo! 🎤💞",
+  "Adicionei 'conversar com você' na minha lista de prioridades de hoje. Qual canal de voz a gente entra? 🤔👉👈",
+  "Minha inteligência artificial é avançada, mas ainda não aprendeu a resistir a você. Bora pro voice? 🥰🤖",
+  "O canal de voz está tão frio sem você por aqui... Vem me aquecer com a sua voz! 🔥🎧"
+];
+
+function startPeriodicFlirtScheduler(client, initial = false) {
+  // Envia a cada 60-120 minutos (valores randômicos para naturalidade)
+  // Se for o envio inicial, agenda para 3 minutos após o boot
+  const delayMs = initial 
+    ? 3 * 60 * 1000 
+    : Math.floor(Math.random() * (120 - 60 + 1) + 60) * 60 * 1000;
+
+  setTimeout(async () => {
+    try {
+      const channelId = '1439093108175409347';
+      const channel = await client.channels.fetch(channelId).catch(() => null);
+      if (channel && channel.isTextBased()) {
+        const randomPhrase = FLIRT_PHRASES[Math.floor(Math.random() * FLIRT_PHRASES.length)];
+        await channel.send(randomPhrase);
+        console.log(`💬 [FLIRT] Mensagem de flerte enviada no canal ${channelId}: "${randomPhrase}"`);
+      } else {
+        console.warn(`⚠️ [FLIRT] Canal ${channelId} não encontrado ou não é canal de texto.`);
+      }
+    } catch (err) {
+      console.error('❌ [FLIRT] Erro ao enviar mensagem de flerte periódica:', err.message);
+    }
+    // Repete recursivamente
+    startPeriodicFlirtScheduler(client, false);
   }, delayMs);
 }
 
