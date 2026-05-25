@@ -20,7 +20,7 @@ export const LOOT_TABLE = [
     icon: '🦉',
     name: 'Coruja da Madrugada',
     tag: '🦉',
-    chance: 0.05, // 5% de chance
+    chance: 0.25, // 25% de chance ao falar de madrugada
     condition: () => {
       const hora = new Date().getHours();
       return hora >= 2 && hora <= 5; // Entre 2 AM e 5 AM
@@ -35,7 +35,7 @@ export const LOOT_TABLE = [
     icon: '🔥',
     name: 'Máquina de Falar',
     tag: '🔥',
-    chance: 0.10, // 10% de chance (avaliação única por chamada ao cruzar o limite)
+    chance: 1.0, // 100% de chance (garantido ao cruzar o limite)
     condition: (speakDurationSeconds, userId) => {
       const sessionSpeakingTime = getSessionSpeakingTime(userId);
       if (sessionSpeakingTime >= 300) {
@@ -53,7 +53,7 @@ export const LOOT_TABLE = [
     icon: '🗣️',
     name: 'Tagarela Inveterado',
     tag: '🗣️',
-    chance: 0.05, // 5% de chance (avaliação única por chamada ao cruzar o limite)
+    chance: 1.0, // 100% de chance (garantido ao cruzar o limite)
     condition: (speakDurationSeconds, userId) => {
       const sessionSpeakingTime = getSessionSpeakingTime(userId);
       if (sessionSpeakingTime >= 120) {
@@ -83,7 +83,7 @@ export const LOOT_TABLE = [
     icon: '👻',
     name: 'Fantasma Tagarela',
     tag: '👻',
-    chance: 0.01, // 1% de chance
+    chance: 0.20, // 20% de chance de madrugada
     condition: (speakDurationSeconds) => {
       const hora = new Date().getHours();
       return hora === 0; // Dropa à Meia-noite (hora das bruxas)
@@ -98,7 +98,7 @@ export const LOOT_TABLE = [
     icon: '☕',
     name: 'Bom Dia, Vietnam!',
     tag: '☕',
-    chance: 0.03, // 3% de chance
+    chance: 0.25, // 25% de chance
     condition: () => {
       const hora = new Date().getHours();
       return hora >= 6 && hora <= 9; // Drop matinal
@@ -113,7 +113,7 @@ export const LOOT_TABLE = [
     icon: '🎙️',
     name: 'O Grande Orador',
     tag: '🎙️',
-    chance: 0.15, // 15% de chance (avaliação única por chamada ao cruzar o limite)
+    chance: 1.0, // 100% de chance (garantido ao cruzar o limite)
     condition: (speakDurationSeconds, userId) => {
       const sessionSpeakingTime = getSessionSpeakingTime(userId);
       if (sessionSpeakingTime >= 600) {
@@ -131,7 +131,7 @@ export const LOOT_TABLE = [
     icon: '⚡',
     name: 'Velocista Vocal',
     tag: '⚡',
-    chance: 0.02, // 2% de chance
+    chance: 0.20, // 20% de chance
     condition: (speakDurationSeconds) => {
       return speakDurationSeconds >= 5 && speakDurationSeconds <= 8; // Falas muito rápidas, mas válidas
     },
@@ -145,7 +145,7 @@ export const LOOT_TABLE = [
     icon: '🍻',
     name: 'Inimigo do Fim',
     tag: '🍻',
-    chance: 0.04, // 4% de chance
+    chance: 0.25, // 25% de chance
     condition: () => {
       const day = new Date().getDay();
       const hour = new Date().getHours();
@@ -163,7 +163,7 @@ export const LOOT_TABLE = [
     name: 'Maratonista de Call',
     tag: '🏃‍♂️',
     type: 'presence',
-    chance: 0.50, // 50% de chance
+    chance: 1.0, // 100% de chance (garantido)
     condition: (presenceSeconds) => {
       return presenceSeconds >= 10800; // Conectado por mais de 3 horas
     },
@@ -178,7 +178,7 @@ export const LOOT_TABLE = [
     name: 'Ouvinte Atento',
     tag: '🎧',
     type: 'presence',
-    chance: 0.30, // 30% de chance
+    chance: 1.0, // 100% de chance (garantido)
     condition: (presenceSeconds, userId, speakingSeconds) => {
       return presenceSeconds >= 3600 && speakingSeconds <= 10; // Mais de 1 hora ouvindo, falou menos de 10s
     },
@@ -193,7 +193,7 @@ export const LOOT_TABLE = [
     name: 'Lorde do Silêncio',
     tag: '🤫',
     type: 'presence',
-    chance: 0.40, // 40% de chance
+    chance: 1.0, // 100% de chance (garantido)
     condition: (presenceSeconds, userId, speakingSeconds) => {
       return presenceSeconds >= 7200 && speakingSeconds === 0; // Mais de 2 horas em silêncio absoluto
     },
@@ -208,7 +208,7 @@ export const LOOT_TABLE = [
     name: 'Astro da Câmera',
     tag: '🎥',
     type: 'presence',
-    chance: 0.50, // 50% de chance
+    chance: 1.0, // 100% de chance (garantido)
     condition: (presenceSeconds, userId, speakingSeconds, cameraSeconds) => {
       return cameraSeconds >= 1800; // 30 minutos de câmera ligada
     },
@@ -223,7 +223,7 @@ export const LOOT_TABLE = [
     name: 'Maratonista de Webcam',
     tag: '📷',
     type: 'presence',
-    chance: 0.80, // 80% de chance
+    chance: 1.0, // 100% de chance (garantido)
     condition: (presenceSeconds, userId, speakingSeconds, cameraSeconds) => {
       return cameraSeconds >= 3600; // 1 hora de câmera ligada
     },
@@ -596,7 +596,7 @@ export async function evaluatePresenceLootDrop(client, guildId, channelId, userI
 
       // Anuncia o drop
       await announceLootDrop(client, guildId, channelId, userId, loot, isDuplicate, timesEarned);
-      break; // Concede apenas 1 conquista por saída
+      // Removido o break para permitir ganhar mais de 1 conquista de presença por saída
     }
   }
 }

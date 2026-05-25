@@ -83,11 +83,12 @@ export async function stopPresenceTracking(userId) {
   );
 
   // Importa dinamicamente o client do Discord e o motor de loot para avaliar conquistas de presença ao sair
-  import('./index.js').then(({ client }) => {
-    const channel = client.channels.cache.get(session.channelId);
-    if (channel && channel.guild) {
-      import('./utils/lootSystem.js').then(({ evaluatePresenceLootDrop }) => {
-        evaluatePresenceLootDrop(
+  import('./index.js').then(async ({ client }) => {
+    try {
+      const channel = await client.channels.fetch(session.channelId).catch(() => null);
+      if (channel && channel.guild) {
+        const { evaluatePresenceLootDrop } = await import('./utils/lootSystem.js');
+        await evaluatePresenceLootDrop(
           client,
           channel.guild.id,
           channel.id,
@@ -96,12 +97,12 @@ export async function stopPresenceTracking(userId) {
           totalSessionPresence,
           session.speakingSeconds || 0,
           session.cameraSeconds || 0
-        ).catch(err => {
-          console.error('❌ Erro no evaluatePresenceLootDrop:', err.message);
-        });
-      }).catch(err => {
-        console.error('❌ Erro ao importar lootSystem no stopPresenceTracking:', err.message);
-      });
+        );
+      } else {
+        console.warn(`⚠️ [PRESENÇA] Canal ${session.channelId} não encontrado no stopPresenceTracking para ${session.username}`);
+      }
+    } catch (err) {
+      console.error('❌ Erro ao processar drop de presença no stopPresenceTracking:', err.message);
     }
   }).catch(err => {
     console.error('❌ Erro ao importar client no stopPresenceTracking:', err.message);
