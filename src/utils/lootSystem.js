@@ -664,10 +664,10 @@ export async function syncNicknameWithPreloadedData(member, existingBadges, rari
  * Executada periodicamente ou quando o usuário sai do canal de voz.
  */
 export async function evaluatePresenceLootDrop(client, guildId, channelId, userId, username, presenceSeconds, speakingSeconds, cameraSeconds = 0, thresholdsChecked = null) {
+  addLog('Loot', `🔍 Avaliando presença para ${username} (Presença: ${Math.floor(presenceSeconds)}s | Fala: ${Math.floor(speakingSeconds)}s | Câmera: ${Math.floor(cameraSeconds)}s)`);
+
   // Ignora chamadas muito curtas (menos de 60 segundos)
   if (presenceSeconds < 60) return;
-
-  addLog('Loot', `🔍 Avaliando presença para ${username} (Presença: ${Math.floor(presenceSeconds)}s | Fala: ${Math.floor(speakingSeconds)}s | Câmera: ${Math.floor(cameraSeconds)}s)`);
 
   const existingBadges = await getUserBadges(userId);
   const earnedBadgeIds = existingBadges.map(b => b.badge_name);
