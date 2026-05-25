@@ -9,6 +9,34 @@ import { ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle }
 // Cache em memória para garantir que não haja drops repetidos mesmo com delay/erro no Supabase
 const pendingAwards = new Set(); // Formato: 'userId:badgeName'
 
+// Controle de cooldowns em memória para evitar spam de conquistas de fala
+// Estrutura: userId -> { lastGlobalDrop: timestamp, badgeCooldowns: { [badgeName]: timestamp } }
+const userCooldowns = new Map();
+
+function checkAndApplyCooldown(userId, badgeName) {
+  const now = Date.now();
+  const userData = userCooldowns.get(userId) || { lastGlobalDrop: 0, badgeCooldowns: {} };
+
+  // 1. Cooldown Global: Mínimo de 5 minutos entre qualquer conquista de fala
+  const globalElapsed = now - userData.lastGlobalDrop;
+  if (globalElapsed < 5 * 60 * 1000) {
+    return false;
+  }
+
+  // 2. Cooldown do Badge: Mínimo de 30 minutos para ganhar a mesma conquista de fala novamente
+  const lastBadgeDrop = userData.badgeCooldowns[badgeName] || 0;
+  const badgeElapsed = now - lastBadgeDrop;
+  if (badgeElapsed < 30 * 60 * 1000) {
+    return false;
+  }
+
+  // Atualiza timestamps
+  userData.lastGlobalDrop = now;
+  userData.badgeCooldowns[badgeName] = now;
+  userCooldowns.set(userId, userData);
+  return true;
+}
+
 /**
  * Tabela de Drops Dinâmicos (Loot).
  * 'chance' é o percentual base de chance por tentativa (0 a 1).
@@ -196,7 +224,7 @@ export const LOOT_TABLE = [
     type: 'presence',
     chance: 1.0, // 100% de chance (garantido)
     condition: (presenceSeconds, userId, speakingSeconds) => {
-      return presenceSeconds >= 7200 && speakingSeconds === 0; // Mais de 2 horas em silêncio absoluto
+      return presenceSeconds >= 7200 && speakingSeconds <= 5; // Mais de 2 horas em silêncio absoluto (tolerância de 5s de ruído)
     },
     evolutions: [
       { threshold: 5, icon: '📿', name: 'Monge Meditativo', tag: '📿' },
@@ -293,13 +321,19 @@ export async function evaluateLootDrop(client, guildId, channelId, userId, usern
     
     // Se a rolagem for menor ou igual à chance (ex: 0.04 <= 0.05) -> VENCEU!
     if (roll <= loot.chance) {
+      // Aplica controle de cooldowns
+      if (!checkAndApplyCooldown(userId, loot.name)) {
+        addLog('Loot', `⏳ Cooldown ativo para ${username} na conquista "${loot.name}". Drop cancelado.`);
+        continue;
+      }
+
       const isDuplicate = earnedBadgeIds.includes(loot.name);
       const timesEarned = existingBadges.filter(b => b.badge_name === loot.name).length + 1;
 
       addLog('Loot', `🎁 GANHOU! ${username} dropou conquista "${loot.name}" (Tier ${timesEarned})`);
       console.log(`🎁 [LOOT DROP] ${username} ${isDuplicate ? 'evoluiu' : 'ganhou'} a conquista: ${loot.name} (Nível ${timesEarned})`);
       
-      // Trava no cache local IMEDIATAMENTE e solta depois de 60s
+      // Trava no cache local IMEDIATAMENTE e solta depois de 60s (dupla proteção)
       const cacheKey = `${userId}:${loot.name}`;
       pendingAwards.add(cacheKey);
       setTimeout(() => pendingAwards.delete(cacheKey), 60000);
