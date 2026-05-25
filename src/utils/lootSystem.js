@@ -170,9 +170,11 @@ export const LOOT_TABLE = [
     name: 'Maratonista de Call',
     tag: '🏃‍♂️',
     type: 'presence',
-    chance: 1.0, // 100% de chance (garantido)
+    repeatable: true, // Pode ser dado várias vezes na mesma sessão
+    repeatCooldownMs: 60 * 60 * 1000, // Mínimo 1 hora entre repetições
+    chance: 1.0,
     condition: (presenceSeconds) => {
-      return presenceSeconds >= 10800; // Conectado por mais de 3 horas
+      return presenceSeconds >= 3600; // Conectado por mais de 1 hora
     },
     evolutions: [
       { threshold: 5, icon: '🚴', name: 'Ciclista de Call', tag: '🚴' },
@@ -185,9 +187,11 @@ export const LOOT_TABLE = [
     name: 'Ouvinte Atento',
     tag: '🎧',
     type: 'presence',
-    chance: 1.0, // 100% de chance (garantido)
+    repeatable: true, // Pode ser dado várias vezes na mesma sessão (a cada flush)
+    repeatCooldownMs: 30 * 60 * 1000, // Mínimo 30 minutos entre repetições
+    chance: 1.0,
     condition: (presenceSeconds, userId, speakingSeconds) => {
-      return presenceSeconds >= 3600 && speakingSeconds <= 10; // Mais de 1 hora ouvindo, falou menos de 10s
+      return presenceSeconds >= 1800 && speakingSeconds < 60; // 30 min em call com menos de 60s de fala
     },
     evolutions: [
       { threshold: 5, icon: '📡', name: 'Antena Humana', tag: '📡' },
@@ -200,7 +204,9 @@ export const LOOT_TABLE = [
     name: 'Lorde do Silêncio',
     tag: '🤫',
     type: 'presence',
-    chance: 1.0, // 100% de chance (garantido)
+    repeatable: true, // Pode ser dado várias vezes na mesma sessão (a cada flush)
+    repeatCooldownMs: 10 * 60 * 1000, // Mínimo 10 minutos entre repetições
+    chance: 1.0,
     condition: (presenceSeconds, userId, speakingSeconds) => {
       return presenceSeconds >= 600 && speakingSeconds < 15; // 10 minutos em call com menos de 15s de fala
     },
@@ -695,12 +701,19 @@ export async function evaluatePresenceLootDrop(client, guildId, channelId, userI
   const earnedBadgeIds = existingBadges.map(b => b.badge_name);
 
   // Filtra as conquistas elegíveis do tipo presence
-  const eligibleLoots = LOOT_TABLE.filter(loot => 
-    loot.type === 'presence' &&
-    (!thresholdsChecked || !thresholdsChecked.has(loot.id)) && // Ignora se já ganhou nesta sessão
-    loot.condition(presenceSeconds, userId, speakingSeconds, cameraSeconds) &&
-    !pendingAwards.has(`${userId}:${loot.name}`)
-  );
+  const eligibleLoots = LOOT_TABLE.filter(loot => {
+    if (loot.type !== 'presence') return false;
+    if (!loot.condition(presenceSeconds, userId, speakingSeconds, cameraSeconds)) return false;
+
+    // Conquistas repetíveis usam pendingAwards com TTL personalizado (não bloqueiam a sessão toda)
+    if (loot.repeatable) {
+      return !pendingAwards.has(`${userId}:${loot.name}`);
+    }
+
+    // Conquistas não-repetíveis: bloqueadas pelo thresholdsChecked da sessão E pelo pendingAwards
+    if (thresholdsChecked && thresholdsChecked.has(loot.id)) return false;
+    return !pendingAwards.has(`${userId}:${loot.name}`);
+  });
 
   if (eligibleLoots.length === 0) return;
 
@@ -715,27 +728,27 @@ export async function evaluatePresenceLootDrop(client, guildId, channelId, userI
       addLog('Loot', `🎁 GANHOU! ${username} dropou conquista de presença "${loot.name}" (Tier ${timesEarned})`);
       console.log(`🎁 [PRESENCE LOOT DROP] ${username} ${isDuplicate ? 'evoluiu' : 'ganhou'} a conquista: ${loot.name} (Nível ${timesEarned})`);
 
-      // Trava no cache local imediatamente por 60s
+      // Trava no cache — conquistas repetíveis usam TTL próprio, não-repetíveis usam 60s
       const cacheKey = `${userId}:${loot.name}`;
       pendingAwards.add(cacheKey);
-      setTimeout(() => pendingAwards.delete(cacheKey), 60000);
+      const ttl = loot.repeatable ? (loot.repeatCooldownMs ?? 600000) : 60000;
+      setTimeout(() => pendingAwards.delete(cacheKey), ttl);
 
-      // Registra que a conquista foi ganha nesta sessão para evitar duplicidade em tempo real
-      if (thresholdsChecked) {
+      // Conquistas não-repetíveis marcam o thresholdsChecked da sessão para nunca repetir
+      if (!loot.repeatable && thresholdsChecked) {
         thresholdsChecked.add(loot.id);
       }
 
       // Salva no banco de dados
       await awardBadge(userId, username, loot.icon, loot.name, loot.tag);
 
-      // Bônus de 1000 XP
+      // Bônus de 1000 XP por evolução
       if (isDuplicate) {
         await addSpeakingTime(userId, username, 334);
       }
 
-      // Anuncia o drop
+      // Anuncia o drop (ou atualiza nickname silenciosamente se no cooldown de notificações)
       await announceLootDrop(client, guildId, channelId, userId, loot, isDuplicate, timesEarned);
-      // Removido o break para permitir ganhar mais de 1 conquista de presença por saída
     }
   }
 }
