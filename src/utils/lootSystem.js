@@ -236,13 +236,180 @@ export const LOOT_TABLE = [
     name: 'Maratonista de Webcam',
     tag: '📷',
     type: 'presence',
-    chance: 1.0, // 100% de chance (garantido)
+    chance: 1.0,
     condition: (presenceSeconds, userId, speakingSeconds, cameraSeconds) => {
       return cameraSeconds >= 3600; // 1 hora de câmera ligada
     },
     evolutions: [
       { threshold: 5, icon: '👁️', name: 'Vigilante Visual', tag: '👁️' },
       { threshold: 20, icon: '🛸', name: 'Streamer Interestelar', tag: '🛸' }
+    ]
+  },
+
+  // ── NOVAS CONQUISTAS ──────────────────────────────────────────
+
+  {
+    // Fala muito longa de uma vez só (discurso interminável)
+    id: 'discurseiro',
+    icon: '🧏',
+    name: 'Discurseiro Incansável',
+    tag: '🧏',
+    chance: 1.0,
+    condition: (speakDurationSeconds) => {
+      return speakDurationSeconds >= 120; // Falou por 2 minutos sem parar
+    },
+    evolutions: [
+      { threshold: 5, icon: '📜', name: 'Filósofo do Microfone', tag: '📜' },
+      { threshold: 20, icon: '🗽', name: 'Lorde do Palanque', tag: '🗽' }
+    ]
+  },
+  {
+    // Fala no almoço (12h-14h)
+    id: 'almoco',
+    icon: '🍽️',
+    name: 'Call no Almoço',
+    tag: '🍽️',
+    chance: 0.30,
+    condition: () => {
+      const hora = new Date().getHours();
+      return hora >= 12 && hora <= 14;
+    },
+    evolutions: [
+      { threshold: 5, icon: '🥩', name: 'Chef da Call', tag: '🥩' },
+      { threshold: 20, icon: '👨‍🍳', name: 'Gordon Ramsay da Voz', tag: '👨‍🍳' }
+    ]
+  },
+  {
+    // Fala na hora da tarde preguiçosa (14h-16h)
+    id: 'sesta',
+    icon: '😴',
+    name: 'Resistente à Sesta',
+    tag: '😴',
+    chance: 0.25,
+    condition: () => {
+      const hora = new Date().getHours();
+      return hora >= 14 && hora <= 16;
+    },
+    evolutions: [
+      { threshold: 5, icon: '🛋️', name: 'Dono do Sofá', tag: '🛋️' },
+      { threshold: 20, icon: '🦥', name: 'Preguiça Élite', tag: '🦥' }
+    ]
+  },
+  {
+    // Fala na segunda-feira (o dia mais temido)
+    id: 'segunda',
+    icon: '😤',
+    name: 'Sobrevivente da Segunda',
+    tag: '😤',
+    chance: 0.35,
+    condition: () => {
+      return new Date().getDay() === 1; // Segunda-feira
+    },
+    evolutions: [
+      { threshold: 5, icon: '⚔️', name: 'Guerreiro da Segunda', tag: '⚔️' },
+      { threshold: 20, icon: '🏆', name: 'Imortal da Semana', tag: '🏆' }
+    ]
+  },
+  {
+    // Fala no domingo à noite (aquele terror existencial)
+    id: 'domingo',
+    icon: '😰',
+    name: 'Ansiedade do Domingo',
+    tag: '😰',
+    chance: 0.30,
+    condition: () => {
+      const day = new Date().getDay();
+      const hora = new Date().getHours();
+      return day === 0 && hora >= 19; // Domingo depois das 19h
+    },
+    evolutions: [
+      { threshold: 5, icon: '🌧️', name: 'Profeta da Chuva', tag: '🌧️' },
+      { threshold: 20, icon: '🌀', name: 'Senhor do Caos Semanal', tag: '🌀' }
+    ]
+  },
+  {
+    // Falou muito rápido várias vezes seguidas (fala explosiva)
+    id: 'metralhadora',
+    icon: '🔫',
+    name: 'Metralhadora Verbal',
+    tag: '🔫',
+    chance: 0.15,
+    condition: (speakDurationSeconds) => {
+      return speakDurationSeconds >= 5 && speakDurationSeconds <= 12; // Rajadas curtas
+    },
+    evolutions: [
+      { threshold: 10, icon: '💣', name: 'Grenadeiro de Palavras', tag: '💣' },
+      { threshold: 30, icon: '🚀', name: 'Míssil Hipersônico', tag: '🚀' }
+    ]
+  },
+  {
+    // Falou entre 30 e 60 segundos (papo equilibrado)
+    id: 'equilibrista',
+    icon: '🎯',
+    name: 'Equilibrista Vocal',
+    tag: '🎯',
+    chance: 0.12,
+    condition: (speakDurationSeconds) => {
+      return speakDurationSeconds >= 30 && speakDurationSeconds <= 60;
+    },
+    evolutions: [
+      { threshold: 5, icon: '⚖️', name: 'Mestre do Timing', tag: '⚖️' },
+      { threshold: 20, icon: '🧬', name: 'Arquiteto da Conversa', tag: '🧬' }
+    ]
+  },
+  {
+    // Entra em call depois das 23h (gosta de call noturna)
+    id: 'noturno',
+    icon: '🌙',
+    name: 'Habitué da Noite',
+    tag: '🌙',
+    type: 'presence',
+    repeatable: true,
+    repeatCooldownMs: 60 * 60 * 1000, // 1 hora entre drops
+    chance: 1.0,
+    condition: (presenceSeconds) => {
+      const hora = new Date().getHours();
+      return (hora >= 23 || hora <= 1) && presenceSeconds >= 600; // 10+ min em call após 23h
+    },
+    evolutions: [
+      { threshold: 5, icon: '🦇', name: 'Morcego da Voz', tag: '🦇' },
+      { threshold: 20, icon: '🧛', name: 'Vampiro do Discord', tag: '🧛' }
+    ]
+  },
+  {
+    // Ficou em call mais de 2h com câmera ligada
+    id: 'streamer',
+    icon: '🎮',
+    name: 'Streamer Honorário',
+    tag: '🎮',
+    type: 'presence',
+    repeatable: true,
+    repeatCooldownMs: 2 * 60 * 60 * 1000, // 2 horas entre drops
+    chance: 1.0,
+    condition: (presenceSeconds, userId, speakingSeconds, cameraSeconds) => {
+      return presenceSeconds >= 7200 && cameraSeconds >= 3600; // 2h em call + 1h de câmera
+    },
+    evolutions: [
+      { threshold: 5, icon: '📺', name: 'Apresentador Honorário', tag: '📺' },
+      { threshold: 20, icon: '🌐', name: 'Influencer do Discord', tag: '🌐' }
+    ]
+  },
+  {
+    // Fala em horário de expediente (9h-18h num dia útil)
+    id: 'workaholic',
+    icon: '💼',
+    name: 'Workaholic do Discord',
+    tag: '💼',
+    chance: 0.20,
+    condition: () => {
+      const day = new Date().getDay();
+      const hora = new Date().getHours();
+      const diaUtil = day >= 1 && day <= 5;
+      return diaUtil && hora >= 9 && hora <= 18;
+    },
+    evolutions: [
+      { threshold: 5, icon: '🖥️', name: 'Home Office Supremo', tag: '🖥️' },
+      { threshold: 20, icon: '🏢', name: 'CEO do Caos', tag: '🏢' }
     ]
   }
 ];
