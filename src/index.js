@@ -249,28 +249,48 @@ client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
 // 5. Evento: Interação de comando (Slash Commands)
 // ============================================
 client.on(Events.InteractionCreate, async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
+  // Se for comando Slash
+  if (interaction.isChatInputCommand()) {
+    const command = client.commands.get(interaction.commandName);
+    if (!command) {
+      console.warn(`⚠️  Comando desconhecido: ${interaction.commandName}`);
+      return;
+    }
 
-  const command = client.commands.get(interaction.commandName);
-  if (!command) {
-    console.warn(`⚠️  Comando desconhecido: ${interaction.commandName}`);
-    return;
+    try {
+      await command.execute(interaction);
+    } catch (error) {
+      console.error(`❌ Erro ao executar /${interaction.commandName}:`, error);
+
+      const reply = {
+        content: '❌ Ocorreu um erro ao executar este comando. Tente novamente.',
+        ephemeral: true,
+      };
+
+      if (interaction.deferred || interaction.replied) {
+        await interaction.editReply(reply);
+      } else {
+        await interaction.reply(reply);
+      }
+    }
   }
+  // Se for interação com componente de mensagem (Botão, Select Menu, etc.)
+  else if (interaction.isButton() || interaction.isStringSelectMenu() || interaction.isUserSelectMenu()) {
+    const customId = interaction.customId;
+    const parts = customId.split(':');
+    const commandPrefix = parts[0];
 
-  try {
-    await command.execute(interaction);
-  } catch (error) {
-    console.error(`❌ Erro ao executar /${interaction.commandName}:`, error);
-
-    const reply = {
-      content: '❌ Ocorreu um erro ao executar este comando. Tente novamente.',
-      ephemeral: true,
-    };
-
-    if (interaction.deferred || interaction.replied) {
-      await interaction.editReply(reply);
-    } else {
-      await interaction.reply(reply);
+    const command = client.commands.get(commandPrefix);
+    if (command && typeof command.handleInteraction === 'function') {
+      try {
+        await command.handleInteraction(interaction, parts.slice(1));
+      } catch (error) {
+        console.error(`❌ Erro ao processar interação do componente ${customId}:`, error);
+        await interaction.reply({
+          content: '❌ Ocorreu um erro ao processar esta ação.',
+          ephemeral: true
+        }).catch(() => null);
+      }
     }
   }
 });

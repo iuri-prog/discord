@@ -2,7 +2,7 @@
 // commands/loja.js — A Loja do Caos
 // ============================================
 
-import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, UserSelectMenuBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { getEconomy, spendCoins, addEconomy } from '../database.js';
 
 export const data = new SlashCommandBuilder()
@@ -58,62 +58,117 @@ const TROLL_NAMES = [
   "Caçador de Borboletas"
 ];
 
+const SHOP_ITEMS = {
+  mordaca: { name: 'Mordaça 🤐', price: 100, desc: 'Muta um amigo no servidor por 10 segundos.' },
+  surdez: { name: 'Surdez Súbita 🔇', price: 150, desc: 'Deixa um amigo totalmente surdo por 15 segundos.' },
+  chute: { name: 'O Chute 👢', price: 400, desc: 'Derruba um amigo do canal de voz atual.' },
+  teleporte: { name: 'Teleporte 🌀', price: 300, desc: 'Joga um amigo para um canal de voz aleatório.' },
+  identidade: { name: 'Nova Identidade 🤡', price: 200, desc: 'Muda o apelido por uma piada por 10 minutos.' },
+  trombadinha: { name: 'Trombadinha 🥷', price: 50, desc: 'Tenta roubar moedas de um amigo (50% de chance de sucesso).' }
+};
+
 export async function execute(interaction) {
   await interaction.deferReply();
 
-  const command = interaction.options.getSubcommand();
-  const targetUser = interaction.options.getUser('alvo');
+  const command = interaction.options.getSubcommand(false);
   const executor = interaction.user;
 
-  if (targetUser.id === executor.id) {
-    return interaction.editReply('Você não pode usar itens em si mesmo, gênio.');
-  }
-  if (targetUser.bot) {
-    return interaction.editReply('Meus irmãos robôs são imunes aos itens humanos.');
-  }
+  if (command) {
+    const targetUser = interaction.options.getUser('alvo');
 
-  // Tenta buscar o alvo na Guilda para ver se ele está numa call
-  const guild = interaction.guild;
-  const memberTarget = await guild.members.fetch(targetUser.id).catch(() => null);
-
-  if (!memberTarget) {
-    return interaction.editReply('Usuário não encontrado no servidor.');
-  }
-
-  // Ações da Loja
-  let price = 0;
-  
-  if (command === 'mordaca') price = 100;
-  if (command === 'surdez') price = 150;
-  if (command === 'chute') price = 400;
-  if (command === 'teleporte') price = 300;
-  if (command === 'identidade') price = 200;
-  if (command === 'trombadinha') price = 50;
-
-  // Verifica Saldo
-  const econ = await getEconomy(executor.id);
-  if (econ.voice_coins < price) {
-    return interaction.editReply(`❌ Você está pobre! Precisa de \`${price}\` moedas, mas só tem \`${econ.voice_coins}\`. Fale mais nas calls para ganhar dinheiro.`);
-  }
-
-  // Checagens prévias de conexão (exceto pra roubo e identidade)
-  if (['mordaca', 'surdez', 'chute', 'teleporte'].includes(command)) {
-    if (!memberTarget.voice || !memberTarget.voice.channel) {
-      return interaction.editReply(`❌ O alvo ${targetUser} não está em nenhum canal de voz! O item só funciona se ele estiver numa call.`);
+    if (targetUser.id === executor.id) {
+      return interaction.editReply('Você não pode usar itens em si mesmo, gênio.');
     }
+    if (targetUser.bot) {
+      return interaction.editReply('Meus irmãos robôs são imunes aos itens humanos.');
+    }
+
+    // Tenta buscar o alvo na Guilda para ver se ele está numa call
+    const guild = interaction.guild;
+    const memberTarget = await guild.members.fetch(targetUser.id).catch(() => null);
+
+    if (!memberTarget) {
+      return interaction.editReply('Usuário não encontrado no servidor.');
+    }
+
+    const item = SHOP_ITEMS[command];
+    const price = item ? item.price : 0;
+
+    // Verifica Saldo
+    const econ = await getEconomy(executor.id);
+    if (econ.voice_coins < price) {
+      return interaction.editReply(`❌ Você está pobre! Precisa de \`${price}\` moedas, mas só tem \`${econ.voice_coins}\`. Fale mais nas calls para ganhar dinheiro.`);
+    }
+
+    // Checagens prévias de conexão (exceto pra roubo e identidade)
+    if (['mordaca', 'surdez', 'chute', 'teleporte'].includes(command)) {
+      if (!memberTarget.voice || !memberTarget.voice.channel) {
+        return interaction.editReply(`❌ O alvo ${targetUser} não está em nenhum canal de voz! O item só funciona se ele estiver numa call.`);
+      }
+    }
+
+    // Desconta o dinheiro
+    const success = await spendCoins(executor.id, price);
+    if (!success) {
+      return interaction.editReply('❌ Erro ao descontar suas moedas.');
+    }
+
+    return runPurchaseExecution(interaction, command, targetUser, memberTarget, price, executor);
   }
 
-  // Desconta o dinheiro
-  const success = await spendCoins(executor.id, price);
-  if (!success) {
-    return interaction.editReply('❌ Erro ao descontar suas moedas.');
-  }
+  // Se não há subcomando, abre a loja interativa!
+  try {
+    const econ = await getEconomy(executor.id);
+    const balance = econ ? econ.voice_coins : 0;
 
-  // EXECUÇÃO DO ITEM
+    const catalogEmbed = new EmbedBuilder()
+      .setColor(0xEF4444) // Vermelho do Caos
+      .setTitle('🏪 A Loja do Caos')
+      .setDescription(
+        `Compre itens especiais usando suas **Voice Coins** para trollar ou interagir com seus amigos nos canais de voz!\n\n` +
+        `💰 **Seu Saldo:** \`${balance}\` Voice Coins\n` +
+        `Selecione um item no menu abaixo para iniciar.`
+      )
+      .addFields(
+        { name: '🤐 Mordaça (100 coins)', value: 'Muta um amigo no servidor por 10 segundos.', inline: true },
+        { name: '🔇 Surdez Súbita (150 coins)', value: 'Deixa um amigo totalmente surdo por 15 segundos.', inline: true },
+        { name: '👢 O Chute (400 coins)', value: 'Derruba um amigo do canal de voz atual.', inline: true },
+        { name: '🌀 Teleporte (300 coins)', value: 'Move um amigo para um canal de voz aleatório.', inline: true },
+        { name: '🤡 Nova Identidade (200 coins)', value: 'Muda o apelido de um amigo para um nome engraçado por 10 minutos.', inline: true },
+        { name: '🥷 Trombadinha (50 coins)', value: 'Tenta roubar moedas de um amigo (50% de chance de sucesso).', inline: true }
+      )
+      .setTimestamp();
+
+    const selectMenu = new StringSelectMenuBuilder()
+      .setCustomId(`loja:select:${executor.id}`)
+      .setPlaceholder('Escolha um item para comprar...')
+      .addOptions([
+        { label: '🤐 Mordaça (100 coins)', value: 'mordaca', description: 'Muta alguém por 10 segundos.' },
+        { label: '🔇 Surdez Súbita (150 coins)', value: 'surdez', description: 'Surdo por 15 segundos.' },
+        { label: '👢 O Chute (400 coins)', value: 'chute', description: 'Chuta alguém da chamada de voz.' },
+        { label: '🌀 Teleporte (300 coins)', value: 'teleporte', description: 'Move alguém para canal aleatório.' },
+        { label: '🤡 Nova Identidade (200 coins)', value: 'identidade', description: 'Apelido troll por 10 min.' },
+        { label: '🥷 Trombadinha (50 coins)', value: 'trombadinha', description: 'Tenta roubar moedas de alguém.' }
+      ]);
+
+    const row = new ActionRowBuilder().addComponents(selectMenu);
+
+    await interaction.editReply({ embeds: [catalogEmbed], components: [row] });
+  } catch (error) {
+    console.error('Erro ao abrir loja interativa:', error);
+    await interaction.editReply('❌ Ocorreu um erro ao abrir a Loja do Caos.');
+  }
+}
+
+async function runPurchaseExecution(interaction, command, targetUser, memberTarget, price, executor) {
   try {
     if (command === 'mordaca') {
       await memberTarget.voice.setMute(true, `Vítima de mordaça por ${executor.username}`);
-      interaction.editReply(`🤐 **MORDAÇA!** Você pagou ${price} moedas e ${targetUser} ficará calado(a) por 10 segundos!`);
+      await interaction.editReply({
+        content: `🤐 **MORDAÇA!** Você pagou ${price} moedas e ${targetUser} ficará calado(a) por 10 segundos!`,
+        embeds: [],
+        components: []
+      });
       
       setTimeout(async () => {
         try { await memberTarget.voice.setMute(false, 'Tempo da mordaça acabou'); } catch (e) {}
@@ -122,7 +177,11 @@ export async function execute(interaction) {
 
     else if (command === 'surdez') {
       await memberTarget.voice.setDeaf(true, `Vítima de surdez por ${executor.username}`);
-      interaction.editReply(`🔇 **SURDEZ SÚBITA!** Você pagou ${price} moedas. ${targetUser} ficou totalmente surdo(a) na call por 15 segundos! Shhh... fofoquem dele!`);
+      await interaction.editReply({
+        content: `🔇 **SURDEZ SÚBITA!** Você pagou ${price} moedas. ${targetUser} ficou totalmente surdo(a) na call por 15 segundos! Shhh... fofoquem dele!`,
+        embeds: [],
+        components: []
+      });
       
       setTimeout(async () => {
         try { await memberTarget.voice.setDeaf(false, 'Tempo da surdez acabou'); } catch (e) {}
@@ -131,11 +190,15 @@ export async function execute(interaction) {
 
     else if (command === 'chute') {
       await memberTarget.voice.disconnect(`Chutado por ${executor.username}`);
-      interaction.editReply(`👢 **O CHUTE!** Você pagou ${price} moedas! O pé virtual atingiu a bunda de ${targetUser} e ele(a) voou do canal de voz! 😂`);
+      await interaction.editReply({
+        content: `👢 **O CHUTE!** Você pagou ${price} moedas! O pé virtual atingiu a bunda de ${targetUser} e ele(a) voou do canal de voz! 😂`,
+        embeds: [],
+        components: []
+      });
     }
 
     else if (command === 'teleporte') {
-      // Pega canais de voz exceto o atual
+      const guild = memberTarget.guild;
       const voiceChannels = guild.channels.cache.filter(c => 
         (c.type === 2 || c.type === 13) && c.id !== memberTarget.voice.channelId
       );
@@ -143,34 +206,49 @@ export async function execute(interaction) {
       if (voiceChannels.size === 0) {
         // Se não tiver pra onde mover, devolve as moedas
         await addEconomy(executor.id, executor.username, price, 0);
-        return interaction.editReply(`❌ Não há outros canais de voz disponíveis para teletransportar ${targetUser}. Moedas devolvidas.`);
+        return interaction.editReply({
+          content: `❌ Não há outros canais de voz disponíveis para teletransportar ${targetUser}. Moedas devolvidas.`,
+          embeds: [],
+          components: []
+        });
       }
 
       const randomChannel = voiceChannels.random();
       await memberTarget.voice.setChannel(randomChannel, `Teleportado por ${executor.username}`);
-      interaction.editReply(`🌀 **TELEPORTE!** Gastou ${price} moedas! ${targetUser} foi sugado(a) por um vórtice e parou lá no canal **${randomChannel.name}**!`);
+      await interaction.editReply({
+        content: `🌀 **TELEPORTE!** Gastou ${price} moedas! ${targetUser} foi sugado(a) por um vórtice e parou lá no canal **${randomChannel.name}**!`,
+        embeds: [],
+        components: []
+      });
     }
 
     else if (command === 'identidade') {
       if (!memberTarget.manageable) {
         await addEconomy(executor.id, executor.username, price, 0);
-        return interaction.editReply(`❌ Não tenho permissão (hierarquia) para mudar o nick de ${targetUser}. Moedas devolvidas.`);
+        return interaction.editReply({
+          content: `❌ Não tenho permissão (hierarquia) para mudar o nick de ${targetUser}. Moedas devolvidas.`,
+          embeds: [],
+          components: []
+        });
       }
 
       const oldNick = memberTarget.displayName;
       const newNick = TROLL_NAMES[Math.floor(Math.random() * TROLL_NAMES.length)];
       
       await memberTarget.setNickname(newNick, `Vítima de Identidade por ${executor.username}`);
-      interaction.editReply(`🤡 **NOVA IDENTIDADE!** Pagou ${price} moedas! Pelos próximos 10 minutos, o apelido de ${targetUser} será **${newNick}** no servidor!`);
+      await interaction.editReply({
+        content: `🤡 **NOVA IDENTIDADE!** Pagou ${price} moedas! Pelos próximos 10 minutos, o apelido de ${targetUser} será **${newNick}** no servidor!`,
+        embeds: [],
+        components: []
+      });
       
       setTimeout(async () => {
         try {
-          // Só muda de volta se o nick ainda for o troll
           if (memberTarget.displayName === newNick) {
             await memberTarget.setNickname(oldNick, 'Trollagem acabou');
           }
         } catch (e) {}
-      }, 10 * 60 * 1000); // 10 minutos
+      }, 10 * 60 * 1000);
     }
 
     else if (command === 'trombadinha') {
@@ -178,37 +256,194 @@ export async function execute(interaction) {
       
       if (targetEcon.voice_coins < 10) {
         await addEconomy(executor.id, executor.username, price, 0);
-        return interaction.editReply(`❌ ${targetUser} está mais liso que você (tem menos de 10 moedas). O roubo não ia compensar. Moedas devolvidas.`);
+        return interaction.editReply({
+          content: `❌ ${targetUser} está mais liso que você (tem menos de 10 moedas). O roubo não ia compensar. Moedas devolvidas.`,
+          embeds: [],
+          components: []
+        });
       }
 
-      // Sorteio (50% chance)
       const isSuccess = Math.random() >= 0.5;
 
       if (isSuccess) {
-        // Quantia a roubar: de 10 a 50 moedas, ou o máximo que ele tiver se for menor
         const rouboAmount = Math.min(targetEcon.voice_coins, Math.floor(Math.random() * 41) + 10);
         
         await spendCoins(targetUser.id, rouboAmount);
-        await addEconomy(executor.id, executor.username, rouboAmount, 0); // O preço (50) já foi gasto, ele lucra o roubo
+        await addEconomy(executor.id, executor.username, rouboAmount, 0);
 
-        interaction.editReply(`🥷 **BATEU A CARTEIRA!** Deu bom! Você pagou os 50 da taxa da gangue e conseguiu roubar \`${rouboAmount}\` moedas de ${targetUser}! Seu saldo aumentou.`);
+        await interaction.editReply({
+          content: `🥷 **BATEU A CARTEIRA!** Deu bom! Você pagou os 50 da taxa da gangue e conseguiu roubar \`${rouboAmount}\` moedas de ${targetUser}! Seu saldo aumentou.`,
+          embeds: [],
+          components: []
+        });
       } else {
-        // Falha! Ele já gastou os 50. Agora vamos dar os 50 para a vítima.
-        await addEconomy(targetUser.id, targetUser.user.username, price, 0);
+        await addEconomy(targetUser.id, targetUser.username || targetUser.tag, price, 0);
         
-        interaction.editReply(`🚔 **DEU RUIM!** Você tentou bater a carteira de ${targetUser}, tropeçou e caiu de cara no chão! Você perdeu \`${price}\` moedas, e o alvo pegou elas do chão pra ele!`);
+        await interaction.editReply({
+          content: `🚔 **DEU RUIM!** Você tentou bater a carteira de ${targetUser}, tropeçou e caiu de cara no chão! Você perdeu \`${price}\` moedas, e o alvo pegou elas do chão pra ele!`,
+          embeds: [],
+          components: []
+        });
       }
     }
 
-    // Apaga a mensagem da loja automaticamente após 15 segundos para não acumular spam
     setTimeout(() => {
       interaction.deleteReply().catch(() => {});
     }, 15000);
 
   } catch (error) {
     console.error('❌ Erro na execução de item da loja:', error);
-    // Se der erro de permissão no Discord, tenta devolver as moedas
     await addEconomy(executor.id, executor.username, price, 0);
-    return interaction.editReply(`❌ Ocorreu um erro ao usar o item em ${targetUser} (Possível falta de permissões do bot). Suas moedas foram devolvidas.`);
+    return interaction.editReply({
+      content: `❌ Ocorreu um erro ao usar o item em ${targetUser} (Possível falta de permissões do bot). Suas moedas foram devolvidas.`,
+      embeds: [],
+      components: []
+    });
+  }
+}
+
+export async function handleInteraction(interaction, args) {
+  const [action, ...rest] = args;
+
+  if (action === 'select') {
+    const [authorId] = rest;
+    if (interaction.user.id !== authorId) {
+      return interaction.reply({ content: '❌ Apenas quem abriu a loja pode selecionar itens.', ephemeral: true });
+    }
+
+    const itemId = interaction.values[0];
+    const item = SHOP_ITEMS[itemId];
+    if (!item) return;
+
+    await interaction.deferUpdate();
+
+    const embed = new EmbedBuilder()
+      .setColor(0xEF4444)
+      .setTitle(`🛒 Seleção de Alvo — ${item.name}`)
+      .setDescription(`Você escolheu **${item.name}** (${item.price} coins).\nSelecione o usuário alvo no menu abaixo para continuar.`)
+      .setTimestamp();
+
+    const userMenu = new UserSelectMenuBuilder()
+      .setCustomId(`loja:target:${itemId}:${authorId}`)
+      .setPlaceholder('Escolha a vítima do item...');
+
+    const row = new ActionRowBuilder().addComponents(userMenu);
+    await interaction.editReply({ embeds: [embed], components: [row] });
+  }
+
+  else if (action === 'target') {
+    const [itemId, authorId] = rest;
+    if (interaction.user.id !== authorId) {
+      return interaction.reply({ content: '❌ Apenas quem abriu a loja pode selecionar o alvo.', ephemeral: true });
+    }
+
+    const targetUserId = interaction.values[0];
+    if (targetUserId === authorId) {
+      await interaction.reply({ content: '❌ Você não pode usar itens em si mesmo, gênio.', ephemeral: true });
+      return;
+    }
+
+    await interaction.deferUpdate();
+
+    const targetUser = await interaction.client.users.fetch(targetUserId).catch(() => null);
+    if (!targetUser) {
+      return interaction.editReply({ content: '❌ Usuário não encontrado.', embeds: [], components: [] });
+    }
+
+    if (targetUser.bot) {
+      await interaction.editReply({ content: '❌ Meus irmãos robôs são imunes aos itens humanos.', embeds: [], components: [] });
+      setTimeout(() => {
+        interaction.deleteReply().catch(() => {});
+      }, 15000);
+      return;
+    }
+
+    const item = SHOP_ITEMS[itemId];
+    const confirmEmbed = new EmbedBuilder()
+      .setColor(0xEF4444)
+      .setTitle('📝 Confirmar Compra')
+      .setDescription(
+        `Você está prestes a comprar **${item.name}** para usar em **${targetUser.username}**.\n\n` +
+        `💵 **Custo:** \`${item.price}\` Voice Coins\n\n` +
+        `Deseja confirmar a transação?`
+      )
+      .setTimestamp();
+
+    const btnConfirm = new ButtonBuilder()
+      .setCustomId(`loja:buy:${itemId}:${targetUserId}:${authorId}`)
+      .setLabel('Confirmar Compra')
+      .setStyle(ButtonStyle.Success);
+
+    const btnCancel = new ButtonBuilder()
+      .setCustomId(`loja:cancel:${authorId}`)
+      .setLabel('Cancelar')
+      .setStyle(ButtonStyle.Danger);
+
+    const row = new ActionRowBuilder().addComponents(btnConfirm, btnCancel);
+    await interaction.editReply({ embeds: [confirmEmbed], components: [row] });
+  }
+
+  else if (action === 'cancel') {
+    const [authorId] = rest;
+    if (interaction.user.id !== authorId) {
+      return interaction.reply({ content: '❌ Apenas o autor da compra pode cancelar.', ephemeral: true });
+    }
+
+    await interaction.deferUpdate();
+    await interaction.editReply({
+      content: '❌ Compra cancelada.',
+      embeds: [],
+      components: []
+    });
+
+    setTimeout(() => {
+      interaction.deleteReply().catch(() => {});
+    }, 15000);
+  }
+
+  else if (action === 'buy') {
+    const [itemId, targetUserId, authorId] = rest;
+    if (interaction.user.id !== authorId) {
+      return interaction.reply({ content: '❌ Apenas quem iniciou a compra pode confirmar.', ephemeral: true });
+    }
+
+    await interaction.deferUpdate();
+
+    const guild = interaction.guild;
+    const memberTarget = await guild.members.fetch(targetUserId).catch(() => null);
+    if (!memberTarget) {
+      return interaction.editReply({ content: '❌ Usuário não encontrado no servidor.', embeds: [], components: [] });
+    }
+
+    const item = SHOP_ITEMS[itemId];
+    const price = item ? item.price : 0;
+
+    const econ = await getEconomy(authorId);
+    if (econ.voice_coins < price) {
+      return interaction.editReply({
+        content: `❌ Você está pobre! Precisa de \`${price}\` moedas, mas só tem \`${econ.voice_coins}\`.`,
+        embeds: [],
+        components: []
+      });
+    }
+
+    if (['mordaca', 'surdez', 'chute', 'teleporte'].includes(itemId)) {
+      if (!memberTarget.voice || !memberTarget.voice.channel) {
+        return interaction.editReply({
+          content: `❌ O alvo ${memberTarget.user} não está em nenhum canal de voz! O item foi cancelado.`,
+          embeds: [],
+          components: []
+        });
+      }
+    }
+
+    const success = await spendCoins(authorId, price);
+    if (!success) {
+      return interaction.editReply({ content: '❌ Erro ao descontar suas moedas.', embeds: [], components: [] });
+    }
+
+    const targetUser = memberTarget.user;
+    const executor = interaction.user;
+    await runPurchaseExecution(interaction, itemId, targetUser, memberTarget, price, executor);
   }
 }
