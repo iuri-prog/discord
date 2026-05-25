@@ -284,13 +284,18 @@ export function updateCameraState(userId, isCamOn) {
  * @returns {Array}
  */
 export function getAllActiveSessions() {
-  return Array.from(presenceSessions.entries()).map(([userId, session]) => ({
-    userId,
-    username: session.username,
-    channelId: session.channelId,
-    presenceSeconds: (Date.now() - session.originalJoinedAt) / 1000,
-    speakingSeconds: session.speakingSeconds || 0,
-    cameraSeconds: session.cameraSeconds || 0,
-    cameraActive: !!session.cameraStartedAt
-  }));
+  const now = Date.now();
+  return Array.from(presenceSessions.entries()).map(([userId, session]) => {
+    // Soma o tempo já acumulado + o tempo atual da câmera (se estiver ativa agora)
+    const liveCameraSeconds = session.cameraStartedAt ? (now - session.cameraStartedAt) / 1000 : 0;
+    return {
+      userId,
+      username: session.username,
+      channelId: session.channelId,
+      presenceSeconds: (now - session.originalJoinedAt) / 1000,
+      speakingSeconds: session.speakingSeconds || 0,
+      cameraSeconds: (session.cameraSeconds || 0) + liveCameraSeconds,
+      cameraActive: !!session.cameraStartedAt
+    };
+  });
 }

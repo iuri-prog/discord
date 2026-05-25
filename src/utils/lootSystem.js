@@ -13,7 +13,7 @@ const pendingAwards = new Set(); // Formato: 'userId:badgeName'
 // Os drops continuam acontecendo normalmente, mas o anúncio visual é limitado.
 // Estrutura: userId -> timestamp do último anúncio enviado
 const lastAnnounceTimes = new Map();
-const ANNOUNCE_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutos entre notificações por usuário
+const ANNOUNCE_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutos entre notificações por usuário
 
 /**
  * Tabela de Drops Dinâmicos (Loot).
