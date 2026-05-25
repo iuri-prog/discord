@@ -4,9 +4,10 @@
 
 import { awardBadge, getUserBadges, addSpeakingTime, updateDatabaseUsername, getBadgeRarityStats } from '../database.js';
 import { getSessionSpeakingTime, checkAndMarkSessionThreshold } from '../voiceTracker.js';
+import { addLog } from './debugLogger.js';
+import { ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 // Cache em memória para garantir que não haja drops repetidos mesmo com delay/erro no Supabase
 const pendingAwards = new Set(); // Formato: 'userId:badgeName'
-
 
 /**
  * Tabela de Drops Dinâmicos (Loot).
@@ -284,6 +285,8 @@ export async function evaluateLootDrop(client, guildId, channelId, userId, usern
 
   if (eligibleLoots.length === 0) return; // Não há loots possíveis
 
+  addLog('Loot', `Avaliando ${eligibleLoots.length} conquistas de fala para ${username} (fala de ${speakDurationSeconds.toFixed(1)}s)...`);
+
   // Rolagem de dados (RNG)
   for (const loot of eligibleLoots) {
     const roll = Math.random(); // Gera número entre 0 e 1
@@ -293,6 +296,7 @@ export async function evaluateLootDrop(client, guildId, channelId, userId, usern
       const isDuplicate = earnedBadgeIds.includes(loot.name);
       const timesEarned = existingBadges.filter(b => b.badge_name === loot.name).length + 1;
 
+      addLog('Loot', `🎁 GANHOU! ${username} dropou conquista "${loot.name}" (Tier ${timesEarned})`);
       console.log(`🎁 [LOOT DROP] ${username} ${isDuplicate ? 'evoluiu' : 'ganhou'} a conquista: ${loot.name} (Nível ${timesEarned})`);
       
       // Trava no cache local IMEDIATAMENTE e solta depois de 60s
@@ -343,18 +347,108 @@ async function announceLootDrop(client, guildId, channelId, userId, loot, isDupl
       messageContent = `🎉 **DROP ÉPICO!** ${member.user} acaba de desbloquear uma nova conquista secreta: **${loot.icon} ${loot.name}**!\nUma tag especial \`${loot.tag}\` foi adicionada ao seu perfil!`;
     }
 
+    // Configura os botões e menu de seleção interativos
+    let color = 3066993; // Verde (0x2ECC71) para Drop Comum
+    if (activeEvolution) {
+      color = 15844367; // Dourado (0xF1C40F) para Evolução Lendária
+    } else if (isDuplicate) {
+      color = 10181046; // Roxo (0x9B59B6) para Evolução Épica
+    }
+
+    const selectMenu = new StringSelectMenuBuilder()
+      .setCustomId(`conquistas:announce_select:${userId}`)
+      .setPlaceholder('⚡ Ver mais opções interessantes...')
+      .addOptions([
+        {
+          label: '👤 Meu Perfil de Voz',
+          description: 'Veja suas estatísticas, nível e saldo de moedas.',
+          value: 'my_profile',
+          emoji: '👤'
+        },
+        {
+          label: '🏆 Minhas Conquistas',
+          description: 'Veja o inventário de conquistas que você já desbloqueou.',
+          value: 'my_badges',
+          emoji: '🏆'
+        },
+        {
+          label: '🏅 Perfil do Vencedor',
+          description: 'Veja o perfil e nível de quem ganhou este drop.',
+          value: 'winner_profile',
+          emoji: '🏅'
+        },
+        {
+          label: '🥇 Conquistas do Vencedor',
+          description: 'Veja todas as conquistas do vencedor deste drop.',
+          value: 'winner_badges',
+          emoji: '🥇'
+        },
+        {
+          label: '📖 Guia de Conquistas',
+          description: 'Veja como obter e evoluir cada conquista secreta.',
+          value: 'guide',
+          emoji: '📖'
+        },
+        {
+          label: '🏪 Loja do Caos',
+          description: 'Visite a Loja para gastar moedas de voz.',
+          value: 'shop',
+          emoji: '🏪'
+        }
+      ]);
+
+    const selectRow = new ActionRowBuilder().addComponents(selectMenu);
+
+    const btnMyProfile = new ButtonBuilder()
+      .setCustomId(`conquistas:announce_btn:${userId}:my_profile`)
+      .setLabel('Meu Perfil')
+      .setEmoji('👤')
+      .setStyle(ButtonStyle.Primary);
+
+    const btnMyBadges = new ButtonBuilder()
+      .setCustomId(`conquistas:announce_btn:${userId}:my_badges`)
+      .setLabel('Minhas Conquistas')
+      .setEmoji('🏆')
+      .setStyle(ButtonStyle.Secondary);
+
+    const btnShop = new ButtonBuilder()
+      .setCustomId(`conquistas:announce_btn:${userId}:shop`)
+      .setLabel('Loja do Caos')
+      .setEmoji('🏪')
+      .setStyle(ButtonStyle.Success);
+
+    const btnRow = new ActionRowBuilder().addComponents(btnMyProfile, btnMyBadges, btnShop);
+
+    const payload = {
+      flags: 32768, // IS_COMPONENTS_V2
+      components: [
+        {
+          type: 17, // CONTAINER
+          accent_color: color,
+          components: [
+            {
+              type: 10, // Text Display
+              content: messageContent
+            }
+          ]
+        },
+        selectRow.toJSON(),
+        btnRow.toJSON()
+      ]
+    };
+
     let sentMessage = null;
     try {
       if (channel && channel.isTextBased()) {
-        sentMessage = await channel.send({ content: messageContent });
+        sentMessage = await channel.send(payload);
       } else if (guild.systemChannel) {
-        sentMessage = await guild.systemChannel.send({ content: messageContent });
+        sentMessage = await guild.systemChannel.send(payload);
       }
     } catch (sendError) {
       console.warn(`⚠️ [LOOT SYSTEM] Falha ao enviar mensagem no canal de voz (${channelId}): ${sendError.message}. Tentando canal do sistema.`);
       try {
         if (guild.systemChannel) {
-          sentMessage = await guild.systemChannel.send({ content: messageContent });
+          sentMessage = await guild.systemChannel.send(payload);
         }
       } catch (sysErr) {
         console.error(`❌ [LOOT SYSTEM] Falha ao enviar mensagem no canal do sistema também:`, sysErr.message);
@@ -459,10 +553,10 @@ export function computeNewNickname(member, existingBadges, rarityStats) {
   const tagsToDisplay = displayBadges.map(b => b.tag);
   let tagSuffix = tagsToDisplay.join(' ');
   
-  // O sufixo [+x] representa a soma total acumulada de todas as conquistas do usuário
-  const totalEarned = existingBadges ? existingBadges.length : 0;
-  if (totalEarned > 0) {
-    tagSuffix += ` [+${totalEarned}]`;
+  // O sufixo [+x] representa a soma de todas as conquistas do usuário (ilimitado, somando a cada drop/evolução)
+  const totalBadgeLevel = existingBadges ? existingBadges.length : 0;
+  if (totalBadgeLevel > 0) {
+    tagSuffix += ` [+${totalBadgeLevel}]`;
   }
 
   // Junta as tags ativas ao final do nome limpo
@@ -586,12 +680,15 @@ export async function evaluatePresenceLootDrop(client, guildId, channelId, userI
 
   if (eligibleLoots.length === 0) return;
 
+  addLog('Loot', `Avaliando ${eligibleLoots.length} conquistas de presença para ${username} (presença: ${Math.floor(presenceSeconds)}s, fala: ${Math.floor(speakingSeconds)}s)...`);
+
   for (const loot of eligibleLoots) {
     const roll = Math.random();
     if (roll <= loot.chance) {
       const isDuplicate = earnedBadgeIds.includes(loot.name);
       const timesEarned = existingBadges.filter(b => b.badge_name === loot.name).length + 1;
 
+      addLog('Loot', `🎁 GANHOU! ${username} dropou conquista de presença "${loot.name}" (Tier ${timesEarned})`);
       console.log(`🎁 [PRESENCE LOOT DROP] ${username} ${isDuplicate ? 'evoluiu' : 'ganhou'} a conquista: ${loot.name} (Nível ${timesEarned})`);
 
       // Trava no cache local imediatamente por 60s

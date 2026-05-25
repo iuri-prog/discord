@@ -47,6 +47,7 @@ import * as falarCommand from './commands/falar.js';
 import * as clonarCommand from './commands/clonar.js';
 import * as repetirCommand from './commands/repetir.js';
 import * as conquistasCommand from './commands/conquistas.js';
+import * as logsCommand from './commands/logs.js';
 import { deployCommands } from './commands/deploy.js';
 
 
@@ -76,6 +77,7 @@ client.commands.set(falarCommand.data.name, falarCommand);
 client.commands.set(clonarCommand.data.name, clonarCommand);
 client.commands.set(repetirCommand.data.name, repetirCommand);
 client.commands.set(conquistasCommand.data.name, conquistasCommand);
+client.commands.set(logsCommand.data.name, logsCommand);
 
 // ============================================
 // 3. Evento: Bot está pronto

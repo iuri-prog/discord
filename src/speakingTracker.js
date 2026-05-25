@@ -8,6 +8,7 @@ import { addSpeakingTime, addEconomy } from './database.js';
 import { incrementSessionSpeakingTime, getSessionChannelId, isTracking, startPresenceTracking } from './voiceTracker.js';
 import { evaluateLootDrop } from './utils/lootSystem.js';
 import { climateState } from './climate.js';
+import { addLog } from './utils/debugLogger.js';
 
 async function processEconomy(userId, username, elapsed) {
   // Chance de ganhar moedas para não perder frações em falas curtas (2 moedas por minuto)
@@ -44,7 +45,7 @@ function makeKey(guildId, userId) {
 
 /**
  * Registra que o usuário começou a falar.
- * Se já existe uma sessão de fala ativa, ignora (evita duplicatas).
+ * Se já existe uma sessão de fala activa, ignora (evita duplicatas).
  * @param {string} guildId - ID do servidor
  * @param {string} userId - ID do usuário
  * @param {string} username - Nome de exibição
@@ -94,6 +95,7 @@ export async function stopSpeaking(guildId, userId) {
 
   // Salva no banco — descarta sessões menores que 0.3s (anti-ruído)
   if (elapsed >= 0.3) {
+    addLog('Fala', `${session.username} falou por ${elapsed.toFixed(1)}s`);
     await addSpeakingTime(userId, session.username, elapsed);
     await processEconomy(userId, session.username, elapsed);
     // Acumula também na sessão de voz ativa (para o histórico)

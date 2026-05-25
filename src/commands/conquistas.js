@@ -4,9 +4,11 @@
 // Exibe as estatísticas globais de raridade de todas
 // as conquistas do bot, junto com as instruções de obtenção.
 
-import { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder } from 'discord.js';
-import { getBadgeRarityStats } from '../database.js';
-import { LOOT_TABLE } from '../utils/lootSystem.js';
+import { SlashCommandBuilder, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { getBadgeRarityStats, getUserMetrics, getUserBadges, getBestFriend } from '../database.js';
+import { LOOT_TABLE, getCurrentBadgeInfo } from '../utils/lootSystem.js';
+import { getLevelEmbedsAndComponents } from './level.js';
+import { getShopPayload } from './loja.js';
 
 const BADGE_DESCRIPTIONS = {
   'coruja': 'Falar em canais de voz entre 02:00 e 05:00 da madrugada.',
@@ -160,9 +162,138 @@ export async function execute(interaction) {
   }
 }
 
+export function getBadgesListPayload(targetUser, badges) {
+  let badgesDisplay = 'Nenhuma conquista desbloqueada ainda. Fale mais para dropar loot!';
+  if (badges && badges.length > 0) {
+    const badgeCounts = {};
+    badges.forEach(b => {
+      if (!badgeCounts[b.badge_name]) {
+        badgeCounts[b.badge_name] = { icon: b.badge_icon, count: 0 };
+      }
+      badgeCounts[b.badge_name].count++;
+    });
+
+    badgesDisplay = Object.entries(badgeCounts).map(([name, data]) => {
+      const loot = LOOT_TABLE.find(l => l.name === name);
+      let displayIcon = data.icon;
+      let displayName = name;
+
+      if (loot) {
+        const badgeInfo = getCurrentBadgeInfo(loot, data.count);
+        displayIcon = badgeInfo.icon;
+        displayName = badgeInfo.name;
+      }
+
+      if (data.count > 1) {
+        return `• ${displayIcon} **${displayName}** (x${data.count})`;
+      }
+      return `• ${displayIcon} **${displayName}**`;
+    }).join('\n');
+  }
+
+  const containerComponents = [
+    {
+      type: 10, // Text Display
+      content: `# 🎒 Inventário de Conquistas - ${targetUser.displayName || targetUser.username}\nConquistas obtidas nos canais de voz:\n\n${badgesDisplay}`
+    }
+  ];
+
+  return {
+    flags: 32768, // IS_COMPONENTS_V2
+    components: [
+      {
+        type: 17, // CONTAINER
+        accent_color: 9133302, // 0x8B5CF6
+        components: containerComponents
+      }
+    ]
+  };
+}
+
 export async function handleInteraction(interaction, args) {
   const [action, authorId] = args;
 
+  // Se for ação dos botões ou do select das conquistas de drop
+  if (action === 'announce_select' || action === 'announce_btn') {
+    await interaction.deferReply({ ephemeral: true });
+    try {
+      const winnerId = authorId; // Neste caso, o segundo argumento é o ID do ganhador
+      const choice = action === 'announce_select' ? interaction.values[0] : args[2];
+      const clickerId = interaction.user.id;
+
+      if (choice === 'my_profile') {
+        const [metrics, badges, bestFriend] = await Promise.all([
+          getUserMetrics(clickerId),
+          getUserBadges(clickerId),
+          getBestFriend(clickerId)
+        ]);
+
+        if (!metrics) {
+          return interaction.editReply({
+            content: '❌ Você ainda não possui perfil de voz. Entre em um canal de voz para começar!'
+          });
+        }
+        const payload = getLevelEmbedsAndComponents(clickerId, interaction.user, metrics, badges, bestFriend, 'stats');
+        return interaction.editReply(payload);
+      }
+
+      else if (choice === 'my_badges') {
+        const badges = await getUserBadges(clickerId);
+        const payload = getBadgesListPayload(interaction.user, badges);
+        return interaction.editReply(payload);
+      }
+
+      else if (choice === 'winner_profile') {
+        const winner = await interaction.client.users.fetch(winnerId).catch(() => null);
+        if (!winner) {
+          return interaction.editReply({ content: '❌ Não foi possível encontrar o perfil do vencedor.' });
+        }
+        const [metrics, badges, bestFriend] = await Promise.all([
+          getUserMetrics(winnerId),
+          getUserBadges(winnerId),
+          getBestFriend(winnerId)
+        ]);
+        if (!metrics) {
+          return interaction.editReply({ content: '❌ O vencedor ainda não possui dados registrados.' });
+        }
+        const payload = getLevelEmbedsAndComponents(clickerId, winner, metrics, badges, bestFriend, 'stats');
+        return interaction.editReply(payload);
+      }
+
+      else if (choice === 'winner_badges') {
+        const winner = await interaction.client.users.fetch(winnerId).catch(() => null);
+        if (!winner) {
+          return interaction.editReply({ content: '❌ Não foi possível encontrar o inventário do vencedor.' });
+        }
+        const badges = await getUserBadges(winnerId);
+        const payload = getBadgesListPayload(winner, badges);
+        return interaction.editReply(payload);
+      }
+
+      else if (choice === 'guide') {
+        const rarityStats = await getBadgeRarityStats();
+        const payload = getConquistasPayload(
+          clickerId,
+          'general',
+          rarityStats,
+          interaction.user.username,
+          interaction.user.displayAvatarURL({ size: 32 })
+        );
+        return interaction.editReply(payload);
+      }
+
+      else if (choice === 'shop') {
+        const payload = await getShopPayload(clickerId);
+        return interaction.editReply(payload);
+      }
+    } catch (err) {
+      console.error('Erro ao processar interação de anúncio:', err);
+      return interaction.editReply({ content: '❌ Ocorreu um erro ao processar esta ação.' }).catch(() => null);
+    }
+    return;
+  }
+
+  // Comportamento padrão para o comando /conquistas tradicional
   if (interaction.user.id !== authorId) {
     return interaction.reply({
       content: '❌ Apenas quem usou o comando pode interagir com o menu.',

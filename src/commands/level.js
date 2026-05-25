@@ -19,7 +19,7 @@ export const data = new SlashCommandBuilder()
       .setRequired(false)
   );
 
-function getLevelEmbedsAndComponents(authorId, targetUser, metrics, badges, bestFriend, activePage) {
+export function getLevelEmbedsAndComponents(authorId, targetUser, metrics, badges, bestFriend, activePage) {
   // Cálculos de Nível e Progresso
   const lvl = getLevelData(metrics.total_presence_time, metrics.total_speaking_time, metrics.bonus_xp || 0);
   const progressBar = renderProgressBar(lvl.progressPercent, 15);

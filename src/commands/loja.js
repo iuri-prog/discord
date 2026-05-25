@@ -154,53 +154,58 @@ export async function execute(interaction) {
 
   // Se não há subcomando, abre a loja interativa!
   try {
-    const econ = await getEconomy(executor.id);
-    const balance = econ ? econ.voice_coins : 0;
-
-    const containerComponents = [
-      {
-        type: 10, // TEXT DISPLAY
-        content: `# 🏪 A Loja do Caos\n💰 **Seu Saldo:** \`${balance}\` Voice Coins\nEscolha um item abaixo para iniciar:`
-      },
-      {
-        type: 14, // SEPARATOR
-        divider: true,
-        spacing: 1
-      }
-    ];
-
-    for (const [key, item] of Object.entries(SHOP_ITEMS)) {
-      containerComponents.push({
-        type: 9, // SECTION
-        components: [
-          {
-            type: 10,
-            content: `### ${item.name} (${item.price} coins)\n${item.desc}`
-          }
-        ],
-        accessory: {
-          type: 2, // BUTTON
-          custom_id: `loja:select:${key}:${executor.id}`,
-          label: 'Escolher',
-          style: 2 // Secondary
-        }
-      });
-    }
-
-    await interaction.editReply({
-      flags: 32768,
-      components: [
-        {
-          type: 17, // CONTAINER
-          accent_color: 15680580,
-          components: containerComponents
-        }
-      ]
-    });
+    const payload = await getShopPayload(executor.id);
+    await interaction.editReply(payload);
   } catch (error) {
     console.error('Erro ao abrir loja interativa:', error);
     await interaction.editReply(getErrorPayload('Ocorreu um erro ao abrir a Loja do Caos.'));
   }
+}
+
+export async function getShopPayload(executorId) {
+  const econ = await getEconomy(executorId);
+  const balance = econ ? econ.voice_coins : 0;
+
+  const containerComponents = [
+    {
+      type: 10, // TEXT DISPLAY
+      content: `# 🏪 A Loja do Caos\n💰 **Seu Saldo:** \`${balance}\` Voice Coins\nEscolha um item abaixo para iniciar:`
+    },
+    {
+      type: 14, // SEPARATOR
+      divider: true,
+      spacing: 1
+    }
+  ];
+
+  for (const [key, item] of Object.entries(SHOP_ITEMS)) {
+    containerComponents.push({
+      type: 9, // SECTION
+      components: [
+        {
+          type: 10,
+          content: `### ${item.name} (${item.price} coins)\n${item.desc}`
+        }
+      ],
+      accessory: {
+        type: 2, // BUTTON
+        custom_id: `loja:select:${key}:${executorId}`,
+        label: 'Escolher',
+        style: 2 // Secondary
+      }
+    });
+  }
+
+  return {
+    flags: 32768,
+    components: [
+      {
+        type: 17, // CONTAINER
+        accent_color: 15680580,
+        components: containerComponents
+      }
+    ]
+  };
 }
 
 async function runPurchaseExecution(interaction, command, targetUser, memberTarget, price, executor) {

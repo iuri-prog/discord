@@ -5,6 +5,7 @@
 // de canais de voz, calculando o tempo total de presença.
 
 import { addPresenceTime, saveVoiceSession } from './database.js';
+import { addLog } from './utils/debugLogger.js';
 
 /**
  * Map em memória para rastrear timestamps de entrada.
@@ -36,6 +37,7 @@ export function startPresenceTracking(userId, username, channelId, initialVideo 
     cameraSeconds: 0, // Segundos com a câmera ligada na sessão atual
   });
 
+  addLog('Presença', `${username} entrou no canal ${channelId} ${initialVideo ? '(câmera ativa)' : ''}`);
   console.log(`📥 [PRESENÇA] ${username} entrou no canal de voz (${channelId}) ${initialVideo ? 'com câmera ligada' : ''}`);
 }
 
@@ -77,6 +79,7 @@ export async function stopPresenceTracking(userId) {
     speakingSeconds: session.speakingSeconds || 0,
   });
 
+  addLog('Presença', `${session.username} saiu. Presença: ${Math.floor(totalSessionPresence)}s | Fala: ${Math.floor(session.speakingSeconds || 0)}s`);
   console.log(
     `📤 [PRESENÇA] ${session.username} saiu. ` +
     `Presença total: ${Math.floor(totalSessionPresence)}s | Fala total: ${Math.floor(session.speakingSeconds || 0)}s | Câmera total: ${Math.floor(session.cameraSeconds || 0)}s`
@@ -269,4 +272,20 @@ export function updateCameraState(userId, isCamOn) {
       console.log(`📷 [CÂMERA] ${session.username} desligou a câmera. Tempo na sessão: ${Math.floor(session.cameraSeconds)}s`);
     }
   }
+}
+
+/**
+ * Retorna uma cópia das sessões de presença ativas para depuração.
+ * @returns {Array}
+ */
+export function getAllActiveSessions() {
+  return Array.from(presenceSessions.entries()).map(([userId, session]) => ({
+    userId,
+    username: session.username,
+    channelId: session.channelId,
+    presenceSeconds: (Date.now() - session.originalJoinedAt) / 1000,
+    speakingSeconds: session.speakingSeconds || 0,
+    cameraSeconds: session.cameraSeconds || 0,
+    cameraActive: !!session.cameraStartedAt
+  }));
 }
