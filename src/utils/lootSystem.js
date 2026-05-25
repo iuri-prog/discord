@@ -202,7 +202,7 @@ export const LOOT_TABLE = [
     type: 'presence',
     chance: 1.0, // 100% de chance (garantido)
     condition: (presenceSeconds, userId, speakingSeconds) => {
-      return presenceSeconds >= 7200 && speakingSeconds <= 5; // Mais de 2 horas em silêncio absoluto (tolerância de 5s de ruído)
+      return presenceSeconds >= 600 && speakingSeconds < 15; // 10 minutos em call com menos de 15s de fala
     },
     evolutions: [
       { threshold: 5, icon: '📿', name: 'Monge Meditativo', tag: '📿' },
