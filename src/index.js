@@ -187,9 +187,6 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
 
     // Sincroniza para garantir que o bot está no canal mais cheio
     await syncVoiceChannels(newState.guild, client);
-
-    // Sincroniza apelido se necessário (checa conquistas acumuladas)
-    await syncMemberNicknameBadges(member);
   }
 
   // ─── Caso 2: Usuário SAIU de um canal de voz ─────────────
@@ -208,9 +205,6 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
 
     // Sincroniza para atualizar a conexão do bot para o canal mais cheio
     await syncVoiceChannels(newState.guild, client);
-
-    // Sincroniza apelido se necessário (checa conquistas acumuladas)
-    await syncMemberNicknameBadges(member);
   }
 
 
