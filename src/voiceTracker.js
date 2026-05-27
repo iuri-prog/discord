@@ -299,3 +299,14 @@ export function getAllActiveSessions() {
     };
   });
 }
+
+/**
+ * Retorna o Set de thresholds avaliados na sessão ativa do usuário.
+ * @param {string} userId
+ * @returns {Set<string>|null}
+ */
+export function getSessionThresholds(userId) {
+  const session = presenceSessions.get(userId);
+  return session ? session.thresholdsChecked : null;
+}
+

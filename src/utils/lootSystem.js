@@ -6,14 +6,31 @@ import { awardBadge, getUserBadges, addSpeakingTime, updateDatabaseUsername, get
 import { getSessionSpeakingTime, checkAndMarkSessionThreshold } from '../voiceTracker.js';
 import { addLog } from './debugLogger.js';
 import { ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { getShowBadgesSetting } from './userSettings.js';
+
 // Cache em memória para garantir que não haja drops repetidos mesmo com delay/erro no Supabase
 const pendingAwards = new Set(); // Formato: 'userId:badgeName'
 
-// Controle de cooldown de NOTIFICAÇÕES para evitar spam no chat
-// Os drops continuam acontecendo normalmente, mas o anúncio visual é limitado.
-// Estrutura: userId -> timestamp do último anúncio enviado
-const lastAnnounceTimes = new Map();
-const ANNOUNCE_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutos entre notificações por usuário
+// Apelidos trolls ativos da loja e sinalização de atualização pelo bot
+export const activeTrollNicknames = new Map(); // userId -> { nickname: string, expiresAt: number, oldNickname: string }
+export const botUpdatingNicks = new Set(); // userId
+
+/**
+ * Corta uma string mantendo-se estritamente abaixo do limite maxLength de code units (JS length),
+ * sem cortar surrogate pairs no meio.
+ * @param {string} str
+ * @param {number} maxLength
+ * @returns {string}
+ */
+export function sliceSafe(str, maxLength) {
+  if (str.length <= maxLength) return str;
+  let sliced = str.substring(0, maxLength);
+  const lastCharCode = sliced.charCodeAt(sliced.length - 1);
+  if (lastCharCode >= 0xD800 && lastCharCode <= 0xDBFF) {
+    sliced = sliced.substring(0, sliced.length - 1);
+  }
+  return sliced;
+}
 
 /**
  * Tabela de Drops Dinâmicos (Loot).
@@ -451,6 +468,10 @@ export async function evaluateLootDrop(client, guildId, channelId, userId, usern
   // Ignorar falas muito curtas (menos de 5 segundos) para não spammar rolagens
   if (speakDurationSeconds < 5) return;
 
+  // Busca as conquistas obtidas no atual canal de voz (thresholds da sessão)
+  const { getSessionThresholds } = await import('../voiceTracker.js');
+  const thresholdsChecked = getSessionThresholds(userId);
+
   // Busca conquistas atuais para não dar o mesmo loot duplicado (opcional, mas recomendado)
   const existingBadges = await getUserBadges(userId);
   const earnedBadgeIds = existingBadges.map(b => b.badge_name); // Vamos checar pelo nome
@@ -458,6 +479,7 @@ export async function evaluateLootDrop(client, guildId, channelId, userId, usern
   // Avaliar loots elegíveis
   const eligibleLoots = LOOT_TABLE.filter(loot => 
     loot.type !== 'presence' && // Ignora conquistas de presença ao falar
+    !(thresholdsChecked && thresholdsChecked.has(loot.id)) && // Bloqueado pelo thresholdsChecked da sessão
     loot.condition(speakDurationSeconds, userId) && 
     !pendingAwards.has(`${userId}:${loot.name}`) // Bloqueio imediato no cache
   );
@@ -484,6 +506,11 @@ export async function evaluateLootDrop(client, guildId, channelId, userId, usern
       pendingAwards.add(cacheKey);
       setTimeout(() => pendingAwards.delete(cacheKey), 60000);
 
+      // Marca o threshold para não ganhar de novo na mesma sessão de voz
+      if (thresholdsChecked) {
+        thresholdsChecked.add(loot.id);
+      }
+
       // Salva no banco de dados
       await awardBadge(userId, username, loot.icon, loot.name, loot.tag);
 
@@ -492,7 +519,7 @@ export async function evaluateLootDrop(client, guildId, channelId, userId, usern
         await addSpeakingTime(userId, username, 334);
       }
 
-      // Dispara a recompensa visual no Discord
+      // Silenciosamente sincroniza o nickname (se ativado pelo usuário)
       await announceLootDrop(client, guildId, channelId, userId, loot, isDuplicate, timesEarned);
       
       // Garante que só ganhe 1 loot por avaliação
@@ -502,191 +529,23 @@ export async function evaluateLootDrop(client, guildId, channelId, userId, usern
 }
 
 /**
- * Anuncia no servidor e muda o apelido temporariamente (ou adiciona a tag).
+ * Sincroniza o nickname do usuário após um drop de conquista de forma silenciosa (sem notificar no chat).
  */
 async function announceLootDrop(client, guildId, channelId, userId, loot, isDuplicate = false, timesEarned = 1) {
   try {
-    // Cooldown de notificações: silencia o anúncio se o usuário ganhou algo recentemente
-    const now = Date.now();
-    const lastAnnounce = lastAnnounceTimes.get(userId) || 0;
-    if (now - lastAnnounce < ANNOUNCE_COOLDOWN_MS) {
-      addLog('Loot', `🔕 Notificação suprimida para ${userId} (cooldown de anúncio ativo). Drop salvo silenciosamente.`);
-      // Ainda sincroniza o nickname mesmo sem anunciar
-      const guild = await client.guilds.fetch(guildId).catch(() => null);
-      if (guild) {
-        const member = await guild.members.fetch(userId).catch(() => null);
-        if (member) await syncMemberNicknameBadges(member).catch(() => null);
-      }
-      return;
-    }
-    lastAnnounceTimes.set(userId, now);
-
-    const guild = await client.guilds.fetch(guildId);
+    const guild = await client.guilds.fetch(guildId).catch(() => null);
     if (!guild) return;
 
     // Buscar o membro para mudar o apelido
-    const member = await guild.members.fetch(userId);
-    
-    // Enviar mensagem no chat de texto vinculado ao canal de voz (se possível)
-    const channel = await guild.channels.fetch(channelId);
-    
-    const currentBadge = getCurrentBadgeInfo(loot, timesEarned);
-    const activeEvolution = (loot.evolutions || []).find(ev => ev.threshold === timesEarned);
-
-    let messageContent = '';
-    if (activeEvolution) {
-      messageContent = `⚡ **EVOLUÇÃO LENDÁRIA!** ${member.user} superou as expectativas e evoluiu sua conquista **${loot.name}** para **${activeEvolution.icon} ${activeEvolution.name}** (Nível ${timesEarned})!\nGanhou \`+1000 XP\` de bônus!`;
-    } else if (isDuplicate) {
-      messageContent = `⚡ **EVOLUÇÃO ÉPICA!** ${member.user} acaba de evoluir sua conquista **${currentBadge.icon} ${currentBadge.name}** para o **Nível ${timesEarned}**!\nGanhou \`+1000 XP\` de bônus!`;
-    } else {
-      messageContent = `🎉 **DROP ÉPICO!** ${member.user} acaba de desbloquear uma nova conquista secreta: **${loot.icon} ${loot.name}**!\nUma tag especial \`${loot.tag}\` foi adicionada ao seu perfil!`;
+    const member = await guild.members.fetch(userId).catch(() => null);
+    if (member) {
+      await syncMemberNicknameBadges(member).catch(() => null);
     }
-
-    // Configura os botões e menu de seleção interativos
-    let color = 3066993; // Verde (0x2ECC71) para Drop Comum
-    if (activeEvolution) {
-      color = 15844367; // Dourado (0xF1C40F) para Evolução Lendária
-    } else if (isDuplicate) {
-      color = 10181046; // Roxo (0x9B59B6) para Evolução Épica
-    }
-
-    const selectMenu = new StringSelectMenuBuilder()
-      .setCustomId(`conquistas:announce_select:${userId}`)
-      .setPlaceholder('⚡ Ver mais opções interessantes...')
-      .addOptions([
-        {
-          label: '👤 Meu Perfil de Voz',
-          description: 'Veja suas estatísticas, nível e saldo de moedas.',
-          value: 'my_profile',
-          emoji: '👤'
-        },
-        {
-          label: '🏆 Minhas Conquistas',
-          description: 'Veja o inventário de conquistas que você já desbloqueou.',
-          value: 'my_badges',
-          emoji: '🏆'
-        },
-        {
-          label: '🏅 Perfil do Vencedor',
-          description: 'Veja o perfil e nível de quem ganhou este drop.',
-          value: 'winner_profile',
-          emoji: '🏅'
-        },
-        {
-          label: '🥇 Conquistas do Vencedor',
-          description: 'Veja todas as conquistas do vencedor deste drop.',
-          value: 'winner_badges',
-          emoji: '🥇'
-        },
-        {
-          label: '📖 Guia de Conquistas',
-          description: 'Veja como obter e evoluir cada conquista secreta.',
-          value: 'guide',
-          emoji: '📖'
-        },
-        {
-          label: '🏪 Loja do Caos',
-          description: 'Visite a Loja para gastar moedas de voz.',
-          value: 'shop',
-          emoji: '🏪'
-        }
-      ]);
-
-    const selectRow = new ActionRowBuilder().addComponents(selectMenu);
-
-    const btnMyProfile = new ButtonBuilder()
-      .setCustomId(`conquistas:announce_btn:${userId}:my_profile`)
-      .setLabel('Meu Perfil')
-      .setEmoji('👤')
-      .setStyle(ButtonStyle.Primary);
-
-    const btnMyBadges = new ButtonBuilder()
-      .setCustomId(`conquistas:announce_btn:${userId}:my_badges`)
-      .setLabel('Minhas Conquistas')
-      .setEmoji('🏆')
-      .setStyle(ButtonStyle.Secondary);
-
-    const btnShop = new ButtonBuilder()
-      .setCustomId(`conquistas:announce_btn:${userId}:shop`)
-      .setLabel('Loja do Caos')
-      .setEmoji('🏪')
-      .setStyle(ButtonStyle.Success);
-
-    const btnRow = new ActionRowBuilder().addComponents(btnMyProfile, btnMyBadges, btnShop);
-
-    const payload = {
-      flags: 32768, // IS_COMPONENTS_V2
-      components: [
-        {
-          type: 17, // CONTAINER
-          accent_color: color,
-          components: [
-            {
-              type: 10, // Text Display
-              content: messageContent
-            }
-          ]
-        },
-        selectRow.toJSON(),
-        btnRow.toJSON()
-      ]
-    };
-
-    let sentMessage = null;
-    try {
-      if (channel && channel.isTextBased()) {
-        sentMessage = await channel.send(payload);
-      } else if (guild.systemChannel) {
-        sentMessage = await guild.systemChannel.send(payload);
-      }
-    } catch (sendError) {
-      console.warn(`⚠️ [LOOT SYSTEM] Falha ao enviar mensagem no canal de voz (${channelId}): ${sendError.message}. Tentando canal do sistema.`);
-      try {
-        if (guild.systemChannel) {
-          sentMessage = await guild.systemChannel.send(payload);
-        }
-      } catch (sysErr) {
-        console.error(`❌ [LOOT SYSTEM] Falha ao enviar mensagem no canal do sistema também:`, sysErr.message);
-      }
-    }
-
-    // Apaga a mensagem automaticamente após 5 minutos (300000ms) para não acumular spam nos chats
-    if (sentMessage) {
-      setTimeout(() => {
-        sentMessage.delete().catch(err => {
-          console.warn(`[LOOT SYSTEM] Não foi possível deletar a mensagem de drop/conquista: ${err.message}`);
-        });
-      }, 300000);
-    }
-
-    // Sincronizar o nickname automaticamente com as conquistas do banco
-    try {
-      await syncMemberNicknameBadges(member);
-    } catch (nickErr) {
-      console.error(`❌ [LOOT SYSTEM] Erro ao sincronizar nickname do membro após o drop:`, nickErr.message);
-    }
-
-    // Efeito sonoro desativado a pedido do usuário (remover som de passar de nível)
-    /*
-    try {
-      await client.rest.post(`/channels/${channelId}/send-soundboard-sound`, {
-        body: { sound_id: '1505797629412511834' }
-      });
-    } catch (soundError) {
-      console.error('❌ Erro ao tocar som do Soundboard:', soundError.message);
-    }
-    */
-
   } catch (error) {
-    console.error('❌ Erro ao processar recompensa visual do loot:', error.message);
+    console.error('❌ Erro ao processar sincronização após loot:', error.message);
   }
 }
 
-/**
- * Verifica as conquistas do usuário no banco de dados e sincroniza o nickname
- * garantindo que possua os ícones corretos de evolução de todas as conquistas obtidas.
- * @param {import('discord.js').GuildMember} member 
- */
 /**
  * Calcula o novo nickname limpo com emojis de conquistas e contador [+x] atualizado.
  * @param {import('discord.js').GuildMember} member 
@@ -696,15 +555,30 @@ async function announceLootDrop(client, guildId, channelId, userId, loot, isDupl
  */
 export function computeNewNickname(member, existingBadges, rarityStats) {
   const currentName = member.displayName || member.user?.username || '';
+  const userId = member.id;
   
   // 1. Remove qualquer padrão de excedente [+x] ou [+ x] existente no apelido
   let cleanName = currentName.replace(/\[\+\s*\d+\]/g, '');
   
+  // Failsafe contra cortes de sufixo no limite de 32 chars: remove [+x ou [+ inacabado no final
+  cleanName = cleanName.replace(/\[\+\s*\d*$/g, '');
+  
   // 2. Remove colchetes vazios [] ou colchetes extras que possam ter sobrado
   cleanName = cleanName.replace(/\[\s*\]/g, '');
   
-  // 3. Remove TODOS os emojis do nome original (qualquer emoji não-conquista será deletado)
-  cleanName = cleanName.replace(/\p{Extended_Pictographic}/gu, '');
+  // 3. Remove apenas os emojis que são conquistas ou evoluções do bot (preserva emojis pessoais)
+  const badgeIcons = new Set();
+  for (const loot of LOOT_TABLE) {
+    badgeIcons.add(loot.icon);
+    if (loot.evolutions) {
+      for (const evo of loot.evolutions) {
+        badgeIcons.add(evo.icon);
+      }
+    }
+  }
+  for (const icon of badgeIcons) {
+    cleanName = cleanName.replaceAll(icon, '');
+  }
   
   // 4. Remove múltiplos espaços extras deixados pela remoção
   cleanName = cleanName.replace(/\s+/g, ' ').trim();
@@ -712,6 +586,12 @@ export function computeNewNickname(member, existingBadges, rarityStats) {
   // Failsafe: se o nome ficou completamente vazio (ex: apelido era só emojis), usa o username original
   if (!cleanName) {
     cleanName = member.user?.username || 'User';
+  }
+
+  // Se o usuário optou por NÃO mostrar as conquistas no nome, retorna apenas o nome limpo
+  if (!getShowBadgesSetting(userId)) {
+    const finalCleanName = sliceSafe(cleanName, 32).trim();
+    return { newName: finalCleanName, currentName, cleanName: finalCleanName };
   }
 
   // Conta conquistas por nome base
@@ -754,10 +634,15 @@ export function computeNewNickname(member, existingBadges, rarityStats) {
     tagSuffix += ` [+${totalBadgeLevel}]`;
   }
 
-  // Junta as tags ativas ao final do nome limpo
+  // Junta as tags ativas ao final do nome limpo usando sliceSafe para evitar ultrapassar 32 chars
   let newName = cleanName;
   if (tagsToDisplay.length > 0) {
-    newName = `${cleanName} ${tagSuffix}`.substring(0, 32).trim();
+    const suffix = ` ${tagSuffix}`;
+    const maxCleanLength = 32 - suffix.length;
+    cleanName = sliceSafe(cleanName, maxCleanLength).trim();
+    newName = `${cleanName}${suffix}`;
+  } else {
+    newName = sliceSafe(cleanName, 32).trim();
   }
 
   return { newName, currentName, cleanName };
@@ -776,6 +661,17 @@ export async function syncMemberNicknameBadges(member, force = false) {
 
   const username = member.user?.username || member.id;
   const userId = member.id;
+
+  // Se o usuário está sob efeito de um apelido troll ativo da loja, ignora sincronização
+  const trollActive = activeTrollNicknames.get(userId);
+  if (trollActive) {
+    if (Date.now() < trollActive.expiresAt) {
+      console.log(`ℹ️ [SYNC NICKNAME] Ignorando sincronização para ${username} devido a apelido troll ativo ("${trollActive.nickname}").`);
+      return;
+    } else {
+      activeTrollNicknames.delete(userId); // Limpa se expirado
+    }
+  }
 
   try {
     const existingBadges = await getUserBadges(userId);
@@ -802,6 +698,7 @@ export async function syncMemberNicknameBadges(member, force = false) {
     if (newName !== currentName || force) {
       if (member.manageable || force) {
         try {
+          botUpdatingNicks.add(userId);
           await member.setNickname(newName, force ? 'Sincronização forçada de apelido' : 'Sincronização automática de apelido com conquistas do banco');
           console.log(`🔄 [SYNC NICKNAME] Nickname de ${username} sincronizado para: ${newName}`);
           // Atualiza o banco de dados para refletir o novo apelido com as tags
@@ -810,6 +707,8 @@ export async function syncMemberNicknameBadges(member, force = false) {
           console.warn(`⚠️ [SYNC NICKNAME] Não foi possível alterar apelido de ${username} no Discord (Sem permissão/Hierarquia):`, err.message);
           // Mesmo se falhar no Discord, garante que o banco de dados esteja com o nome limpo atualizado
           await updateDatabaseUsername(userId, cleanName);
+        } finally {
+          setTimeout(() => botUpdatingNicks.delete(userId), 3000);
         }
       } else {
         console.log(`ℹ️ [SYNC NICKNAME] Ignorando alteração no Discord para ${username} pois não é gerenciável (dono do servidor ou cargo superior).`);
@@ -829,6 +728,13 @@ export async function syncNicknameWithPreloadedData(member, existingBadges, rari
 
   const username = member.user?.username || member.id;
   const userId = member.id;
+
+  // Se o usuário está sob efeito de um apelido troll ativo da loja, ignora sincronização
+  const trollActive = activeTrollNicknames.get(userId);
+  if (trollActive) {
+    if (Date.now() < trollActive.expiresAt) return;
+    else activeTrollNicknames.delete(userId);
+  }
 
   try {
     const { newName, currentName, cleanName } = computeNewNickname(member, existingBadges, rarityStats);
@@ -914,8 +820,11 @@ export async function evaluatePresenceLootDrop(client, guildId, channelId, userI
         await addSpeakingTime(userId, username, 334);
       }
 
-      // Anuncia o drop (ou atualiza nickname silenciosamente se no cooldown de notificações)
+      // Sincroniza apelido silenciosamente
       await announceLootDrop(client, guildId, channelId, userId, loot, isDuplicate, timesEarned);
+      
+      // Limita a no máximo 1 drop de presença por ciclo
+      break;
     }
   }
 }

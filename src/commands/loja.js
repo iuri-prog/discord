@@ -4,6 +4,7 @@
 
 import { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, UserSelectMenuBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { getEconomy, spendCoins, addEconomy } from '../database.js';
+import { activeTrollNicknames, botUpdatingNicks } from '../utils/lootSystem.js';
 
 export const data = new SlashCommandBuilder()
   .setName('loja')
@@ -259,16 +260,41 @@ async function runPurchaseExecution(interaction, command, targetUser, memberTarg
       const oldNick = memberTarget.displayName;
       const newNick = TROLL_NAMES[Math.floor(Math.random() * TROLL_NAMES.length)];
       
-      await memberTarget.setNickname(newNick, `Vítima de Identidade por ${executor.username}`);
+      const duration = 10 * 60 * 1000;
+      const expiresAt = Date.now() + duration;
+      
+      // Registra o apelido troll na estrutura global para bloquear sincronização de conquistas
+      activeTrollNicknames.set(memberTarget.id, { nickname: newNick, expiresAt, oldNickname: oldNick });
+      
+      try {
+        botUpdatingNicks.add(memberTarget.id);
+        await memberTarget.setNickname(newNick, `Vítima de Identidade por ${executor.username}`);
+      } finally {
+        setTimeout(() => botUpdatingNicks.delete(memberTarget.id), 3000);
+      }
+      
       await interaction.editReply(getSuccessPayload(`🤡 **NOVA IDENTIDADE!** Pagou ${price} moedas! Pelos próximos 10 minutos, o apelido de ${targetUser} será **${newNick}** no servidor!`));
       
       setTimeout(async () => {
         try {
-          if (memberTarget.displayName === newNick) {
-            await memberTarget.setNickname(oldNick, 'Trollagem acabou');
+          // Remove da lista de trolls ativos
+          const activeTroll = activeTrollNicknames.get(memberTarget.id);
+          if (activeTroll && activeTroll.nickname === newNick) {
+            activeTrollNicknames.delete(memberTarget.id);
           }
-        } catch (e) {}
-      }, 10 * 60 * 1000);
+          
+          if (memberTarget.displayName === newNick) {
+            try {
+              botUpdatingNicks.add(memberTarget.id);
+              await memberTarget.setNickname(oldNick, 'Trollagem acabou');
+            } finally {
+              setTimeout(() => botUpdatingNicks.delete(memberTarget.id), 3000);
+            }
+          }
+        } catch (e) {
+          console.error(`Erro ao expirar apelido troll de ${memberTarget.id}:`, e.message);
+        }
+      }, duration);
     }
 
     else if (command === 'trombadinha') {

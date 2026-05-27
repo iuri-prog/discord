@@ -8,6 +8,7 @@ import { getUserMetrics, getUserBadges, getBestFriend } from '../database.js';
 import { getLevelData, renderProgressBar } from '../utils/levels.js';
 import { formatTime, speakingPercentage } from '../utils/formatTime.js';
 import { LOOT_TABLE, getCurrentBadgeInfo, syncMemberNicknameBadges } from '../utils/lootSystem.js';
+import { getShowBadgesSetting } from '../utils/userSettings.js';
 
 export const data = new SlashCommandBuilder()
   .setName('level')
@@ -198,7 +199,15 @@ export function getLevelEmbedsAndComponents(authorId, targetUser, metrics, badge
     .setStyle(activePage === 'friend' ? ButtonStyle.Primary : ButtonStyle.Secondary)
     .setDisabled(activePage === 'friend');
 
-  const row = new ActionRowBuilder().addComponents(btnStats, btnBadges, btnFriend);
+  const showBadges = getShowBadgesSetting(targetUser.id);
+  const btnToggle = new ButtonBuilder()
+    .setCustomId(`level:toggleBadges:${authorId}:${targetUser.id}`)
+    .setLabel(showBadges ? 'Tags no Nome: Sim' : 'Tags no Nome: Não')
+    .setEmoji(showBadges ? '🏷️' : '✖️')
+    .setStyle(showBadges ? ButtonStyle.Success : ButtonStyle.Danger)
+    .setDisabled(authorId !== targetUser.id);
+
+  const row = new ActionRowBuilder().addComponents(btnStats, btnBadges, btnFriend, btnToggle);
 
   return {
     flags: 32768, // IS_COMPONENTS_V2
@@ -289,6 +298,46 @@ export async function handleInteraction(interaction, args) {
   try {
     const targetUser = await interaction.client.users.fetch(targetId).catch(() => null);
     if (!targetUser) return;
+
+    // Se for alternar exibição das conquistas no nome
+    if (activePage === 'toggleBadges') {
+      const { setShowBadgesSetting, getShowBadgesSetting } = await import('../utils/userSettings.js');
+      const { syncMemberNicknameBadges } = await import('../utils/lootSystem.js');
+
+      const currentSetting = getShowBadgesSetting(targetId);
+      setShowBadgesSetting(targetId, !currentSetting);
+
+      // Atualiza o apelido do membro imediatamente no Discord
+      const member = await interaction.guild.members.fetch(targetId).catch(() => null);
+      if (member) {
+        await syncMemberNicknameBadges(member, true).catch(() => null);
+      }
+
+      // Detecta qual aba estava ativa anteriormente para manter o usuário nela
+      let lastActivePage = 'stats';
+      const message = interaction.message;
+      if (message.components && message.components[0]) {
+        const buttons = message.components[0].components;
+        const statsBtn = buttons[0];
+        const badgesBtn = buttons[1];
+        const friendBtn = buttons[2];
+        if (statsBtn.disabled) lastActivePage = 'stats';
+        else if (badgesBtn.disabled) lastActivePage = 'badges';
+        else if (friendBtn.disabled) lastActivePage = 'friend';
+      }
+
+      const [metrics, badges, bestFriend] = await Promise.all([
+        getUserMetrics(targetId),
+        getUserBadges(targetId),
+        getBestFriend(targetId)
+      ]);
+
+      if (!metrics) return;
+
+      const payload = getLevelEmbedsAndComponents(authorId, targetUser, metrics, badges, bestFriend, lastActivePage);
+      await interaction.editReply(payload);
+      return;
+    }
 
     const [metrics, badges, bestFriend] = await Promise.all([
       getUserMetrics(targetId),

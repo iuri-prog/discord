@@ -240,6 +240,16 @@ client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
 
   // Só age se o nickname mudou
   if (oldMember.nickname !== newMember.nickname) {
+    // Se a alteração foi feita pelo próprio bot (está no botUpdatingNicks), ignora para evitar loop recursivo
+    try {
+      const { botUpdatingNicks } = await import('./utils/lootSystem.js');
+      if (botUpdatingNicks.has(newMember.id)) {
+        return;
+      }
+    } catch (importErr) {
+      // Ignora erro
+    }
+
     console.log(`👤 [NICKNAME] Apelido de ${newMember.user.username} alterado de "${oldMember.nickname}" para "${newMember.nickname}"`);
     
     // Importa dinamicamente para evitar dependências circulares
