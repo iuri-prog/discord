@@ -57,21 +57,29 @@ function getConquistasPayload(authorId, selectedValue, rarityStats, username, av
       spacing: 1
     });
 
-    for (const loot of LOOT_TABLE) {
-      const count = rarityStats[loot.name] || 0;
-      const percentage = ((count / totalDrops) * 100).toFixed(1);
-      const desc = BADGE_DESCRIPTIONS[loot.id] || 'Condição desconhecida.';
+    const chunkSize = 12;
+    for (let i = 0; i < LOOT_TABLE.length; i += chunkSize) {
+      const chunk = LOOT_TABLE.slice(i, i + chunkSize);
+      let content = '';
       
-      const t1 = loot.icon;
-      const t2 = loot.evolutions[0].icon;
-      const t3 = loot.evolutions[1].icon;
+      for (const loot of chunk) {
+        const count = rarityStats[loot.name] || 0;
+        const percentage = ((count / totalDrops) * 100).toFixed(1);
+        const desc = BADGE_DESCRIPTIONS[loot.id] || 'Condição desconhecida.';
+        
+        const t1 = loot.icon;
+        const t2 = loot.evolutions[0].icon;
+        const t3 = loot.evolutions[1].icon;
+
+        content += `### ${loot.icon} ${loot.name}\n` +
+          `> 💡 **Como obter:** ${desc}\n` +
+          `> 📈 **Evolução:** ${t1} (Base) ➔ ${t2} (Tier 2, 5x) ➔ ${t3} (Tier 3, 10x)\n` +
+          `> 📊 **Frequência:** \`${count}\` drops (~${percentage}%)\n\n`;
+      }
 
       containerComponents.push({
         type: 10, // Text Display
-        content: `### ${loot.icon} ${loot.name}\n` +
-          `> 💡 **Como obter:** ${desc}\n` +
-          `> 📈 **Evolução:** ${t1} (Base) ➔ ${t2} (Tier 2, 5x) ➔ ${t3} (Tier 3, 10x)\n` +
-          `> 📊 **Frequência:** \`${count}\` drops (~${percentage}%)`
+        content: content.trim()
       });
     }
   } else {
