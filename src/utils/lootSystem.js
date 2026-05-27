@@ -68,8 +68,8 @@ export const LOOT_TABLE = [
       return false;
     },
     evolutions: [
-      { threshold: 5, icon: '🌋', name: 'Vulcão Vocal', tag: '🌋' },
-      { threshold: 20, icon: '☄️', name: 'Supernova Solar', tag: '☄️' }
+      { threshold: 5, icon: '💣', name: 'Voz Explosiva', tag: '💣' },
+      { threshold: 20, icon: '☢️', name: 'Radiação Vocal', tag: '☢️' }
     ]
   },
   {
@@ -87,7 +87,7 @@ export const LOOT_TABLE = [
     },
     evolutions: [
       { threshold: 5, icon: '📢', name: 'Voz Sônica', tag: '📢' },
-      { threshold: 20, icon: '📣', name: 'Lorde da Garganta', tag: '📣' }
+      { threshold: 20, icon: '☣️', name: 'Voz Biológica', tag: '☣️' }
     ]
   },
   {
@@ -146,7 +146,7 @@ export const LOOT_TABLE = [
       return false;
     },
     evolutions: [
-      { threshold: 5, icon: '🎭', name: 'Poeta da Madrugada', tag: '🎭' },
+      { threshold: 5, icon: '🔞', name: 'Orador Proibido', tag: '🔞' },
       { threshold: 20, icon: '🏛️', name: 'Lorde do Senado', tag: '🏛️' }
     ]
   },
@@ -160,7 +160,7 @@ export const LOOT_TABLE = [
       return speakDurationSeconds >= 5 && speakDurationSeconds <= 8; // Falas muito rápidas, mas válidas
     },
     evolutions: [
-      { threshold: 5, icon: '🌀', name: 'Ciclone Sônico', tag: '🌀' },
+      { threshold: 5, icon: '🩻', name: 'Velocidade Raio-X', tag: '🩻' },
       { threshold: 20, icon: '🛸', name: 'Velocidade da Luz', tag: '🛸' }
     ]
   },
@@ -217,9 +217,9 @@ export const LOOT_TABLE = [
   },
   {
     id: 'silencio',
-    icon: '🤫',
+    icon: '📵',
     name: 'Lorde do Silêncio',
-    tag: '🤫',
+    tag: '📵',
     type: 'presence',
     repeatable: true, // Pode ser dado várias vezes na mesma sessão (a cada flush)
     repeatCooldownMs: 10 * 60 * 1000, // Mínimo 10 minutos entre repetições
@@ -228,8 +228,8 @@ export const LOOT_TABLE = [
       return presenceSeconds >= 600 && speakingSeconds < 15; // 10 minutos em call com menos de 15s de fala
     },
     evolutions: [
-      { threshold: 5, icon: '📿', name: 'Monge Meditativo', tag: '📿' },
-      { threshold: 20, icon: '🗿', name: 'Estátua de Pedra', tag: '🗿' }
+      { threshold: 5, icon: '🚭', name: 'Silêncio Sem Fumo', tag: '🚭' },
+      { threshold: 20, icon: '🤫', name: 'Silêncio Absoluto', tag: '🤫' }
     ]
   },
   {
@@ -276,7 +276,7 @@ export const LOOT_TABLE = [
       return speakDurationSeconds >= 120; // Falou por 2 minutos sem parar
     },
     evolutions: [
-      { threshold: 5, icon: '📜', name: 'Filósofo do Microfone', tag: '📜' },
+      { threshold: 5, icon: '📎', name: 'Anexador de Ouvidos', tag: '📎' },
       { threshold: 20, icon: '🗽', name: 'Lorde do Palanque', tag: '🗽' }
     ]
   },
