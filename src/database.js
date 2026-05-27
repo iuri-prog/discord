@@ -597,6 +597,10 @@ export async function getAllUserBadgesMap() {
       });
     }
     return map;
+  } catch (err) {
+    console.error('❌ [DB] Erro ao carregar mapa global de badges:', err.message);
+    return {};
+  }
 }
 
 /**
