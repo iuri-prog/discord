@@ -271,19 +271,31 @@ export function getLevelEmbedsAndComponents(authorId, targetUser, metrics, badge
 
   if (activePage === 'badges' && authorId === targetUser.id && uniqueBadges.length > 0) {
     const userSelected = getUserSelectedBadges(authorId) || [];
+    
+    const options = [
+      {
+        label: 'Padrão (3 Mais Raras)',
+        value: 'default',
+        emoji: '❌',
+        default: userSelected.length === 0
+      },
+      ...uniqueBadges.slice(0, 24).map(ub => {
+        const opt = {
+          label: ub.displayName,
+          value: ub.name,
+          default: userSelected.includes(ub.name)
+        };
+        if (ub.icon) opt.emoji = ub.icon;
+        return opt;
+      })
+    ];
+
     const selectMenu = new StringSelectMenuBuilder()
       .setCustomId(`level:selectBadges:${authorId}:${targetUser.id}`)
       .setPlaceholder('Escolha até 3 conquistas para mostrar no nome...')
-      .setMinValues(0)
-      .setMaxValues(Math.min(3, uniqueBadges.length))
-      .addOptions(
-        uniqueBadges.slice(0, 25).map(ub => ({
-          label: ub.displayName,
-          value: ub.name,
-          emoji: ub.icon,
-          default: userSelected.includes(ub.name)
-        }))
-      );
+      .setMinValues(1)
+      .setMaxValues(Math.min(3, options.length))
+      .addOptions(options);
 
     const selectRow = new ActionRowBuilder().addComponents(selectMenu);
     rows.push(selectRow.toJSON());
@@ -386,8 +398,12 @@ export async function handleInteraction(interaction, args) {
       const { setUserSelectedBadges } = await import('../utils/userSettings.js');
       const { syncMemberNicknameBadges } = await import('../utils/lootSystem.js');
 
-      // Salva a seleção do usuário (interaction.values é a lista de conquistas escolhidas)
-      setUserSelectedBadges(authorId, interaction.values);
+      // Salva a seleção do usuário (se selecionou 'default', limpa as customizações)
+      let values = interaction.values || [];
+      if (values.includes('default')) {
+        values = [];
+      }
+      setUserSelectedBadges(authorId, values);
 
       // Atualiza o apelido imediatamente
       const member = await interaction.guild.members.fetch(authorId).catch(() => null);
