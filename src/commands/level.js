@@ -3,7 +3,7 @@
 // ============================================
 // Mostra o perfil completo de voz de um usuário.
 
-import { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } from 'discord.js';
 import { getUserMetrics, getUserBadges, getBestFriend, getEconomy } from '../database.js';
 import { getLevelData, renderProgressBar } from '../utils/levels.js';
 import { formatTime, speakingPercentage } from '../utils/formatTime.js';

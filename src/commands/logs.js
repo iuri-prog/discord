@@ -6,6 +6,7 @@
 import { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { getAllActiveSessions } from '../voiceTracker.js';
 import { getLogs } from '../utils/debugLogger.js';
+import { getLastAwardedBadge } from '../database.js';
 
 export const data = new SlashCommandBuilder()
   .setName('logs')
@@ -21,9 +22,15 @@ function formatDuration(totalSeconds) {
   return `${hours}h ${remMinutes}m`;
 }
 
-export function getLogsPayload(authorId) {
+export function getLogsPayload(authorId, lastBadge) {
   const activeSessions = getAllActiveSessions();
   const recentLogs = getLogs();
+
+  let lastBadgeText = 'Nenhuma conquista registrada no banco de dados ainda.';
+  if (lastBadge) {
+    const timeFormatted = lastBadge.earned_at ? `<t:${Math.floor(new Date(lastBadge.earned_at).getTime() / 1000)}:R>` : 'Desconhecido';
+    lastBadgeText = `🏆 **${lastBadge.badge_icon} ${lastBadge.badge_name}** obtida por **${lastBadge.username}** · ${timeFormatted}`;
+  }
 
   let sessionsText = 'Nenhum membro sendo rastreado em canal de voz no momento.';
   if (activeSessions.length > 0) {
@@ -62,6 +69,15 @@ export function getLogsPayload(authorId) {
     {
       type: 10, // Text Display
       content: `### 📜 Últimos 15 Eventos em Memória (RNG & Voz)\n${logsText}`
+    },
+    {
+      type: 14, // Separator
+      divider: true,
+      spacing: 1
+    },
+    {
+      type: 10, // Text Display
+      content: `### 🎁 Última Conquista Entregue\n${lastBadgeText}`
     }
   ];
 
@@ -89,7 +105,8 @@ export function getLogsPayload(authorId) {
 export async function execute(interaction) {
   await interaction.deferReply();
   try {
-    const payload = getLogsPayload(interaction.user.id);
+    const lastBadge = await getLastAwardedBadge();
+    const payload = getLogsPayload(interaction.user.id, lastBadge);
     await interaction.editReply(payload);
   } catch (error) {
     console.error('Erro ao exibir logs:', error);
@@ -112,7 +129,8 @@ export async function handleInteraction(interaction, args) {
   if (action === 'refresh') {
     await interaction.deferUpdate();
     try {
-      const payload = getLogsPayload(authorId);
+      const lastBadge = await getLastAwardedBadge();
+      const payload = getLogsPayload(authorId, lastBadge);
       await interaction.editReply(payload);
     } catch (error) {
       console.error('Erro ao atualizar logs:', error);

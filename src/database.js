@@ -597,9 +597,25 @@ export async function getAllUserBadgesMap() {
       });
     }
     return map;
+}
+
+/**
+ * Busca a última conquista concedida globalmente no servidor.
+ * @returns {Promise<Object|null>}
+ */
+export async function getLastAwardedBadge() {
+  try {
+    const { data, error } = await supabase
+      .from('user_badges')
+      .select('username, badge_name, badge_icon, earned_at')
+      .order('earned_at', { ascending: false })
+      .limit(1);
+
+    if (error) throw error;
+    return (data && data.length > 0) ? data[0] : null;
   } catch (err) {
-    console.error('❌ [DB] Erro ao carregar mapa global de badges:', err.message);
-    return {};
+    console.error('❌ [DB] Erro ao buscar última conquista concedida:', err.message);
+    return null;
   }
 }
 
