@@ -161,7 +161,7 @@ client.once(Events.ClientReady, async (readyClient) => {
   startPeriodicSpeechScheduler(readyClient);
 
   // Inicia o agendador de curiosidades/engajamento periódicos no chat (primeiro em 3 minutos)
-  startPeriodicChatPromptScheduler(readyClient, true);
+  // startPeriodicChatPromptScheduler(readyClient, true);
 
   // Executa o primeiro auto-check de apelidos no boot (carregando em lote)
   runGlobalNicknameAutoCheck(readyClient).catch(() => null);
