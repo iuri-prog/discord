@@ -4,7 +4,7 @@
 // Mostra o perfil completo de voz de um usuário.
 
 import { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
-import { getUserMetrics, getUserBadges, getBestFriend } from '../database.js';
+import { getUserMetrics, getUserBadges, getBestFriend, getEconomy } from '../database.js';
 import { getLevelData, renderProgressBar } from '../utils/levels.js';
 import { formatTime, speakingPercentage } from '../utils/formatTime.js';
 import { LOOT_TABLE, getCurrentBadgeInfo, syncMemberNicknameBadges } from '../utils/lootSystem.js';
@@ -20,7 +20,7 @@ export const data = new SlashCommandBuilder()
       .setRequired(false)
   );
 
-export function getLevelEmbedsAndComponents(authorId, targetUser, metrics, badges, bestFriend, activePage) {
+export function getLevelEmbedsAndComponents(authorId, targetUser, metrics, badges, bestFriend, activePage, authorBalance = 0) {
   // Cálculos de Nível e Progresso
   const lvl = getLevelData(metrics.total_presence_time, metrics.total_speaking_time, metrics.bonus_xp || 0);
   const progressBar = renderProgressBar(lvl.progressPercent, 15);
@@ -105,7 +105,9 @@ export function getLevelEmbedsAndComponents(authorId, targetUser, metrics, badge
           ? `# 👤 Perfil de Voz - ${targetUser.displayName || targetUser.username}`
           : activePage === 'badges'
             ? `# 🎒 Inventário de Conquistas`
-            : `# 🤝 Melhor Companhia`
+            : activePage === 'friend'
+              ? `# 🤝 Melhor Companhia`
+              : `# 🏪 A Loja do Caos`
       }
     ],
     accessory: {
@@ -164,6 +166,42 @@ export function getLevelEmbedsAndComponents(authorId, targetUser, metrics, badge
       type: 10,
       content: `### 👤 Parceiro de Call\n${bestFriendDisplay}`
     });
+  } else if (activePage === 'shop') {
+    containerComponents.push({
+      type: 10,
+      content: `💰 **Seu Saldo:** \`${authorBalance}\` Voice Coins\nEscolha um item abaixo para usar em alguém na call de voz:`
+    }, {
+      type: 14,
+      divider: true,
+      spacing: 1
+    });
+
+    const SHOP_ITEMS = {
+      mordaca: { name: 'Mordaça 🤐', price: 100, desc: 'Muta um amigo no servidor por 10 segundos.' },
+      surdez: { name: 'Surdez Súbita 🔇', price: 150, desc: 'Deixa um amigo totalmente surdo por 15 segundos.' },
+      chute: { name: 'O Chute 👢', price: 400, desc: 'Derruba um amigo do canal de voz atual.' },
+      teleporte: { name: 'Teleporte 🌀', price: 300, desc: 'Joga um amigo para um canal de voz aleatório.' },
+      identidade: { name: 'Nova Identidade 🤡', price: 200, desc: 'Muda o apelido por uma piada por 10 minutos.' },
+      trombadinha: { name: 'Trombadinha 🥷', price: 50, desc: 'Tenta roubar moedas de um amigo (50% de chance).' }
+    };
+
+    for (const [key, item] of Object.entries(SHOP_ITEMS)) {
+      containerComponents.push({
+        type: 9, // SECTION
+        components: [
+          {
+            type: 10,
+            content: `### ${item.name} (${item.price} coins)\n${item.desc}`
+          }
+        ],
+        accessory: {
+          type: 2, // BUTTON
+          custom_id: `loja:select:${key}:${authorId}`,
+          label: 'Escolher',
+          style: 2 // Secondary
+        }
+      });
+    }
   }
 
   containerComponents.push(
@@ -174,7 +212,7 @@ export function getLevelEmbedsAndComponents(authorId, targetUser, metrics, badge
     },
     {
       type: 10,
-      content: `*Página: ${activePage === 'stats' ? 'Estatísticas' : activePage === 'badges' ? 'Conquistas' : 'Melhor Companhia'} · Solicitado por ${targetUser.username}*`
+      content: `*Página: ${activePage === 'stats' ? 'Estatísticas' : activePage === 'badges' ? 'Conquistas' : activePage === 'friend' ? 'Melhor Companhia' : 'Loja do Caos'} · Solicitado por ${targetUser.username}*`
     }
   );
 
@@ -199,6 +237,13 @@ export function getLevelEmbedsAndComponents(authorId, targetUser, metrics, badge
     .setStyle(activePage === 'friend' ? ButtonStyle.Primary : ButtonStyle.Secondary)
     .setDisabled(activePage === 'friend');
 
+  const btnShop = new ButtonBuilder()
+    .setCustomId(`level:shop:${authorId}:${targetUser.id}`)
+    .setLabel('Loja')
+    .setEmoji('🏪')
+    .setStyle(activePage === 'shop' ? ButtonStyle.Primary : ButtonStyle.Secondary)
+    .setDisabled(activePage === 'shop');
+
   const showBadges = getShowBadgesSetting(targetUser.id);
   const btnToggle = new ButtonBuilder()
     .setCustomId(`level:toggleBadges:${authorId}:${targetUser.id}`)
@@ -207,7 +252,7 @@ export function getLevelEmbedsAndComponents(authorId, targetUser, metrics, badge
     .setStyle(showBadges ? ButtonStyle.Success : ButtonStyle.Danger)
     .setDisabled(authorId !== targetUser.id);
 
-  const row = new ActionRowBuilder().addComponents(btnStats, btnBadges, btnFriend, btnToggle);
+  const row = new ActionRowBuilder().addComponents(btnStats, btnBadges, btnFriend, btnShop, btnToggle);
 
   return {
     flags: 32768, // IS_COMPONENTS_V2
@@ -233,11 +278,12 @@ export async function execute(interaction) {
     await syncMemberNicknameBadges(member, true).catch(() => null);
   }
 
-  // Busca métricas, badges e melhor amigo em paralelo
-  const [metrics, badges, bestFriend] = await Promise.all([
+  // Busca métricas, badges, melhor amigo e economia do autor em paralelo
+  const [metrics, badges, bestFriend, authorEcon] = await Promise.all([
     getUserMetrics(targetUser.id),
     getUserBadges(targetUser.id),
-    getBestFriend(targetUser.id)
+    getBestFriend(targetUser.id),
+    getEconomy(interaction.user.id)
   ]);
 
   if (!metrics) {
@@ -279,7 +325,8 @@ export async function execute(interaction) {
     });
   }
 
-  const payload = getLevelEmbedsAndComponents(interaction.user.id, targetUser, metrics, badges, bestFriend, 'stats');
+  const authorBalance = authorEcon ? authorEcon.voice_coins : 0;
+  const payload = getLevelEmbedsAndComponents(interaction.user.id, targetUser, metrics, badges, bestFriend, 'stats', authorBalance);
   return interaction.editReply(payload);
 }
 
@@ -321,33 +368,39 @@ export async function handleInteraction(interaction, args) {
         const statsBtn = buttons[0];
         const badgesBtn = buttons[1];
         const friendBtn = buttons[2];
+        const shopBtn = buttons[3];
         if (statsBtn.disabled) lastActivePage = 'stats';
         else if (badgesBtn.disabled) lastActivePage = 'badges';
         else if (friendBtn.disabled) lastActivePage = 'friend';
+        else if (shopBtn.disabled) lastActivePage = 'shop';
       }
 
-      const [metrics, badges, bestFriend] = await Promise.all([
+      const [metrics, badges, bestFriend, authorEcon] = await Promise.all([
         getUserMetrics(targetId),
         getUserBadges(targetId),
-        getBestFriend(targetId)
+        getBestFriend(targetId),
+        getEconomy(authorId)
       ]);
 
       if (!metrics) return;
 
-      const payload = getLevelEmbedsAndComponents(authorId, targetUser, metrics, badges, bestFriend, lastActivePage);
+      const authorBalance = authorEcon ? authorEcon.voice_coins : 0;
+      const payload = getLevelEmbedsAndComponents(authorId, targetUser, metrics, badges, bestFriend, lastActivePage, authorBalance);
       await interaction.editReply(payload);
       return;
     }
 
-    const [metrics, badges, bestFriend] = await Promise.all([
+    const [metrics, badges, bestFriend, authorEcon] = await Promise.all([
       getUserMetrics(targetId),
       getUserBadges(targetId),
-      getBestFriend(targetId)
+      getBestFriend(targetId),
+      getEconomy(authorId)
     ]);
 
     if (!metrics) return;
 
-    const payload = getLevelEmbedsAndComponents(authorId, targetUser, metrics, badges, bestFriend, activePage);
+    const authorBalance = authorEcon ? authorEcon.voice_coins : 0;
+    const payload = getLevelEmbedsAndComponents(authorId, targetUser, metrics, badges, bestFriend, activePage, authorBalance);
     await interaction.editReply(payload);
   } catch (error) {
     console.error('Erro ao processar interação em level:', error);
