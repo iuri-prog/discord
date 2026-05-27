@@ -12,7 +12,6 @@ import { data as level } from './level.js';
 import { data as toplevel } from './toplevel.js';
 import { data as loja } from './loja.js';
 import { data as falar } from './falar.js';
-import { data as clonar } from './clonar.js';
 import { data as repetir } from './repetir.js';
 import { data as conquistas } from './conquistas.js';
 import { data as logs } from './logs.js';
@@ -24,7 +23,6 @@ const commands = [
   toplevel.toJSON(),
   loja.toJSON(),
   falar.toJSON(),
-  clonar.toJSON(),
   repetir.toJSON(),
   conquistas.toJSON(),
   logs.toJSON()

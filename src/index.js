@@ -46,7 +46,6 @@ import * as levelCommand from './commands/level.js';
 import * as toplevelCommand from './commands/toplevel.js';
 import * as lojaCommand from './commands/loja.js';
 import * as falarCommand from './commands/falar.js';
-import * as clonarCommand from './commands/clonar.js';
 import * as repetirCommand from './commands/repetir.js';
 import * as conquistasCommand from './commands/conquistas.js';
 import * as logsCommand from './commands/logs.js';
@@ -80,7 +79,6 @@ client.commands.set(levelCommand.data.name, levelCommand);
 client.commands.set(toplevelCommand.data.name, toplevelCommand);
 client.commands.set(lojaCommand.data.name, lojaCommand);
 client.commands.set(falarCommand.data.name, falarCommand);
-client.commands.set(clonarCommand.data.name, clonarCommand);
 client.commands.set(repetirCommand.data.name, repetirCommand);
 client.commands.set(conquistasCommand.data.name, conquistasCommand);
 client.commands.set(logsCommand.data.name, logsCommand);
@@ -403,7 +401,7 @@ client.on(Events.MessageCreate, async (message) => {
         }
 
         // Fallback padrão se for o autor da mensagem
-        if (name === 'usuario' && commandName !== 'clonar' && commandName !== 'repetir') {
+        if (name === 'usuario' && commandName !== 'repetir') {
           return message.author;
         }
         return null;
@@ -426,11 +424,7 @@ client.on(Events.MessageCreate, async (message) => {
           }
         }
 
-        if (commandName === 'clonar') {
-          if (name === 'frase') {
-            return args.slice(1).join(' ').substring(0, 200);
-          }
-        }
+
 
         return null;
       }
