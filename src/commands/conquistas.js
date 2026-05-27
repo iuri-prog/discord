@@ -24,7 +24,17 @@ const BADGE_DESCRIPTIONS = {
   'ouvinte': 'Permanecer por mais de 1 hora na chamada apenas ouvindo (falou menos de 10 segundos).',
   'silencio': 'Permanecer por mais de 2 horas em silêncio absoluto (sem falar) na chamada.',
   'astrocram': 'Permanecer com a câmera ligada por mais de 30 minutos em uma única chamada.',
-  'maratonistacam': 'Permanecer com a câmera ligada por mais de 1 hora em uma única chamada.'
+  'maratonistacam': 'Permanecer com a câmera ligada por mais de 1 hora em uma única chamada.',
+  'discurseiro': 'Falar por mais de 2 minutos ininterruptos em um canal de voz.',
+  'almoco': 'Falar nos canais de voz durante o horário de almoço (12h às 14h).',
+  'sesta': 'Falar nos canais de voz durante a tarde preguiçosa (14h às 16h).',
+  'segunda': 'Falar nos canais de voz em uma segunda-feira.',
+  'domingo': 'Falar nos canais de voz em um domingo à noite (após 19h).',
+  'metralhadora': 'Dar várias falas curtas e rápidas em sequência (entre 5s e 12s).',
+  'equilibrista': 'Manter uma fala equilibrada e contínua entre 30 e 60 segundos.',
+  'noturno': 'Passar mais de 10 minutos conectado em chamadas após as 23h.',
+  'streamer': 'Ficar mais de 2 horas conectado na chamada e pelo menos 1 hora com a câmera ativa.',
+  'workaholic': 'Falar nos canais de voz em horário comercial de dias úteis (9h às 18h).'
 };
 
 export const data = new SlashCommandBuilder()
@@ -112,12 +122,15 @@ function getConquistasPayload(authorId, selectedValue, rarityStats, username, av
       value: 'general',
       emoji: '🏆'
     },
-    ...LOOT_TABLE.map(loot => ({
-      label: loot.name,
-      description: BADGE_DESCRIPTIONS[loot.id]?.substring(0, 50) || '',
-      value: loot.id,
-      emoji: loot.icon
-    }))
+    ...LOOT_TABLE.map(loot => {
+      const desc = BADGE_DESCRIPTIONS[loot.id] || 'Condição especial de voz.';
+      return {
+        label: loot.name,
+        description: desc.substring(0, 100),
+        value: loot.id,
+        emoji: loot.icon
+      };
+    })
   ];
 
   const selectMenu = new StringSelectMenuBuilder()
