@@ -6,7 +6,7 @@ import { awardBadge, getUserBadges, addSpeakingTime, updateDatabaseUsername, get
 import { getSessionSpeakingTime, checkAndMarkSessionThreshold } from '../voiceTracker.js';
 import { addLog } from './debugLogger.js';
 import { ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
-import { getShowBadgesSetting } from './userSettings.js';
+import { getShowBadgesSetting, getUserSelectedBadges } from './userSettings.js';
 
 // Cache em memória para garantir que não haja drops repetidos mesmo com delay/erro no Supabase
 const pendingAwards = new Set(); // Formato: 'userId:badgeName'
@@ -622,8 +622,19 @@ export function computeNewNickname(member, existingBadges, rarityStats) {
     return countA - countB;
   });
 
-  // Pega os 3 mais raros
-  const displayBadges = activeBadgesList.slice(0, 3);
+  // Pega as selecionadas pelo usuário ou, se não houver, os 3 mais raros
+  const userSelected = getUserSelectedBadges(userId);
+  let displayBadges = [];
+  if (userSelected && userSelected.length > 0) {
+    for (const name of userSelected) {
+      const found = activeBadgesList.find(b => b.name === name);
+      if (found) {
+        displayBadges.push(found);
+      }
+    }
+  } else {
+    displayBadges = activeBadgesList.slice(0, 3);
+  }
 
   const tagsToDisplay = displayBadges.map(b => b.tag);
   let tagSuffix = tagsToDisplay.join(' ');

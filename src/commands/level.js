@@ -8,7 +8,7 @@ import { getUserMetrics, getUserBadges, getBestFriend, getEconomy } from '../dat
 import { getLevelData, renderProgressBar } from '../utils/levels.js';
 import { formatTime, speakingPercentage } from '../utils/formatTime.js';
 import { LOOT_TABLE, getCurrentBadgeInfo, syncMemberNicknameBadges } from '../utils/lootSystem.js';
-import { getShowBadgesSetting } from '../utils/userSettings.js';
+import { getShowBadgesSetting, getUserSelectedBadges } from '../utils/userSettings.js';
 
 export const data = new SlashCommandBuilder()
   .setName('level')
@@ -41,6 +41,7 @@ export function getLevelEmbedsAndComponents(authorId, targetUser, metrics, badge
 
   // Formata as badges para exibir no inventário
   let badgesDisplay = 'Nenhuma conquista desbloqueada ainda. Fale mais para dropar loot!';
+  const uniqueBadges = [];
   if (badges && badges.length > 0) {
     const badgeCounts = {};
     badges.forEach(b => {
@@ -60,6 +61,8 @@ export function getLevelEmbedsAndComponents(authorId, targetUser, metrics, badge
         displayIcon = badgeInfo.icon;
         displayName = badgeInfo.name;
       }
+
+      uniqueBadges.push({ name, displayName, icon: displayIcon });
 
       if (data.count > 1) {
         return `• ${displayIcon} **${displayName}** (x${data.count})`;
@@ -161,6 +164,16 @@ export function getLevelEmbedsAndComponents(authorId, targetUser, metrics, badge
       type: 10,
       content: `Conquistas obtidas por **${targetUser.displayName || targetUser.username}** nos canais de voz.\n\n${badgesDisplay}`
     });
+    if (authorId === targetUser.id && uniqueBadges.length > 0) {
+      containerComponents.push({
+        type: 14,
+        divider: true,
+        spacing: 1
+      }, {
+        type: 10,
+        content: `⚙️ **Personalizar Nickname**\nVocê pode escolher até 3 conquistas no menu abaixo para fixar no seu nome do Discord. Se nenhuma for selecionada, o bot mostrará automaticamente as 3 mais raras.`
+      });
+    }
   } else if (activePage === 'friend') {
     containerComponents.push({
       type: 10,
@@ -254,6 +267,28 @@ export function getLevelEmbedsAndComponents(authorId, targetUser, metrics, badge
 
   const row = new ActionRowBuilder().addComponents(btnStats, btnBadges, btnFriend, btnShop, btnToggle);
 
+  const rows = [row.toJSON()];
+
+  if (activePage === 'badges' && authorId === targetUser.id && uniqueBadges.length > 0) {
+    const userSelected = getUserSelectedBadges(authorId) || [];
+    const selectMenu = new StringSelectMenuBuilder()
+      .setCustomId(`level:selectBadges:${authorId}:${targetUser.id}`)
+      .setPlaceholder('Escolha até 3 conquistas para mostrar no nome...')
+      .setMinValues(0)
+      .setMaxValues(Math.min(3, uniqueBadges.length))
+      .addOptions(
+        uniqueBadges.slice(0, 25).map(ub => ({
+          label: ub.displayName,
+          value: ub.name,
+          emoji: ub.icon,
+          default: userSelected.includes(ub.name)
+        }))
+      );
+
+    const selectRow = new ActionRowBuilder().addComponents(selectMenu);
+    rows.push(selectRow.toJSON());
+  }
+
   return {
     flags: 32768, // IS_COMPONENTS_V2
     components: [
@@ -262,7 +297,7 @@ export function getLevelEmbedsAndComponents(authorId, targetUser, metrics, badge
         accent_color: 9133302, // 0x8B5CF6
         components: containerComponents
       },
-      row.toJSON()
+      ...rows
     ]
   };
 }
@@ -345,6 +380,36 @@ export async function handleInteraction(interaction, args) {
   try {
     const targetUser = await interaction.client.users.fetch(targetId).catch(() => null);
     if (!targetUser) return;
+
+    // Se for selecionar as conquistas personalizadas
+    if (activePage === 'selectBadges') {
+      const { setUserSelectedBadges } = await import('../utils/userSettings.js');
+      const { syncMemberNicknameBadges } = await import('../utils/lootSystem.js');
+
+      // Salva a seleção do usuário (interaction.values é a lista de conquistas escolhidas)
+      setUserSelectedBadges(authorId, interaction.values);
+
+      // Atualiza o apelido imediatamente
+      const member = await interaction.guild.members.fetch(authorId).catch(() => null);
+      if (member) {
+        await syncMemberNicknameBadges(member, true).catch(() => null);
+      }
+
+      // Recarrega a página de badges
+      const [metrics, badges, bestFriend, authorEcon] = await Promise.all([
+        getUserMetrics(targetId),
+        getUserBadges(targetId),
+        getBestFriend(targetId),
+        getEconomy(authorId)
+      ]);
+
+      if (!metrics) return;
+
+      const authorBalance = authorEcon ? authorEcon.voice_coins : 0;
+      const payload = getLevelEmbedsAndComponents(authorId, targetUser, metrics, badges, bestFriend, 'badges', authorBalance);
+      await interaction.editReply(payload);
+      return;
+    }
 
     // Se for alternar exibição das conquistas no nome
     if (activePage === 'toggleBadges') {

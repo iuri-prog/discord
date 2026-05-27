@@ -49,3 +49,24 @@ export function setShowBadgesSetting(userId, show) {
   settings[userId] = show;
   saveSettings(settings);
 }
+
+/**
+ * Retorna a lista de nomes de conquistas selecionadas pelo usuário para exibir no apelido.
+ * @param {string} userId - ID do usuário Discord
+ * @returns {Array<string>|null}
+ */
+export function getUserSelectedBadges(userId) {
+  const settings = loadSettings();
+  return settings[`${userId}:selected`] || null;
+}
+
+/**
+ * Define a lista de conquistas que o usuário deseja exibir no apelido.
+ * @param {string} userId - ID do usuário Discord
+ * @param {Array<string>} badges - Lista de nomes de conquistas
+ */
+export function setUserSelectedBadges(userId, badges) {
+  const settings = loadSettings();
+  settings[`${userId}:selected`] = badges;
+  saveSettings(settings);
+}
