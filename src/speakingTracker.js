@@ -97,7 +97,26 @@ export async function stopSpeaking(guildId, userId) {
   // Salva no banco — descarta sessões menores que 0.3s (anti-ruído)
   if (elapsed >= 0.3) {
     addLog('Fala', `${session.username} falou por ${elapsed.toFixed(1)}s`);
-    await addSpeakingTime(userId, session.username, elapsed);
+    const res = await addSpeakingTime(userId, session.username, elapsed);
+    if (res && res.leveledUp && client) {
+      try {
+        const guild = client.guilds.cache.get(guildId) || await client.guilds.fetch(guildId).catch(() => null);
+        if (guild) {
+          const member = await guild.members.fetch(userId).catch(() => null);
+          if (member) {
+            const { syncMemberNicknameBadges } = await import('./utils/lootSystem.js');
+            syncMemberNicknameBadges(member, true).catch(() => null);
+
+            const textChannel = guild.systemChannel || guild.channels.cache.find(c => c.isTextBased() && c.permissionsFor(guild.members.me).has('SendMessages'));
+            if (textChannel) {
+              await textChannel.send(`✨ **Parabéns, ${member}!** Você subiu de nível em voz e agora é **Nível ${res.newLevel}** (${res.rank})! ⚡`);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('❌ Erro ao processar level up no stopSpeaking:', err.message);
+      }
+    }
     await processEconomy(userId, session.username, elapsed);
     // Acumula também na sessão de voz ativa (para o histórico)
     incrementSessionSpeakingTime(userId, elapsed);
@@ -144,7 +163,27 @@ export async function flushAllSpeaking() {
   for (const [key, session] of speakingSessions.entries()) {
     const elapsed = (now - session.startedAt) / 1000;
     if (elapsed >= 0.3) {
-      await addSpeakingTime(session.userId, session.username, elapsed);
+      const res = await addSpeakingTime(session.userId, session.username, elapsed);
+      const guildId = key.split(':')[0];
+      if (res && res.leveledUp && client) {
+        try {
+          const guild = client.guilds.cache.get(guildId) || await client.guilds.fetch(guildId).catch(() => null);
+          if (guild) {
+            const member = await guild.members.fetch(session.userId).catch(() => null);
+            if (member) {
+              const { syncMemberNicknameBadges } = await import('./utils/lootSystem.js');
+              syncMemberNicknameBadges(member, true).catch(() => null);
+
+              const textChannel = guild.systemChannel || guild.channels.cache.find(c => c.isTextBased() && c.permissionsFor(guild.members.me).has('SendMessages'));
+              if (textChannel) {
+                await textChannel.send(`✨ **Parabéns, ${member}!** Você subiu de nível em voz e agora é **Nível ${res.newLevel}** (${res.rank})! ⚡`);
+              }
+            }
+          }
+        } catch (err) {
+          console.error('❌ Erro ao processar level up no flushAllSpeaking:', err.message);
+        }
+      }
       await processEconomy(session.userId, session.username, elapsed);
       // Acumula também na sessão de voz ativa (para o histórico)
       incrementSessionSpeakingTime(session.userId, elapsed);
@@ -176,7 +215,26 @@ export async function stopAllSpeaking(guildId) {
     speakingSessions.delete(key);
 
     if (elapsed >= 0.3) {
-      await addSpeakingTime(session.userId, session.username, elapsed);
+      const res = await addSpeakingTime(session.userId, session.username, elapsed);
+      if (res && res.leveledUp && client) {
+        try {
+          const guild = client.guilds.cache.get(guildId) || await client.guilds.fetch(guildId).catch(() => null);
+          if (guild) {
+            const member = await guild.members.fetch(session.userId).catch(() => null);
+            if (member) {
+              const { syncMemberNicknameBadges } = await import('./utils/lootSystem.js');
+              syncMemberNicknameBadges(member, true).catch(() => null);
+
+              const textChannel = guild.systemChannel || guild.channels.cache.find(c => c.isTextBased() && c.permissionsFor(guild.members.me).has('SendMessages'));
+              if (textChannel) {
+                await textChannel.send(`✨ **Parabéns, ${member}!** Você subiu de nível em voz e agora é **Nível ${res.newLevel}** (${res.rank})! ⚡`);
+              }
+            }
+          }
+        } catch (err) {
+          console.error('❌ Erro ao processar level up no stopAllSpeaking:', err.message);
+        }
+      }
       await processEconomy(session.userId, session.username, elapsed);
       // Acumula também na sessão de voz ativa (para o histórico)
       incrementSessionSpeakingTime(session.userId, elapsed);

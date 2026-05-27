@@ -70,7 +70,26 @@ export async function stopPresenceTracking(userId) {
 
   // 1. Salva a parte pendente (desde o último flush) nas métricas globais
   if (elapsedSinceLastFlush > 0) {
-    await addPresenceTime(userId, session.username, elapsedSinceLastFlush);
+    const res = await addPresenceTime(userId, session.username, elapsedSinceLastFlush);
+    if (res && res.leveledUp && client) {
+      try {
+        const channel = client.channels.cache.get(session.channelId) || await client.channels.fetch(session.channelId).catch(() => null);
+        if (channel && channel.guild) {
+          const member = await channel.guild.members.fetch(userId).catch(() => null);
+          if (member) {
+            const { syncMemberNicknameBadges } = await import('./utils/lootSystem.js');
+            syncMemberNicknameBadges(member, true).catch(() => null);
+
+            const textChannel = channel.guild.systemChannel || channel.guild.channels.cache.find(c => c.isTextBased() && c.permissionsFor(channel.guild.members.me).has('SendMessages'));
+            if (textChannel) {
+              await textChannel.send(`✨ **Parabéns, ${member}!** Você subiu de nível em voz e agora é **Nível ${res.newLevel}** (${res.rank})! ⚡`);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('❌ Erro ao processar level up no stopPresenceTracking:', err.message);
+      }
+    }
   }
 
   // 2. Salva a sessão histórica completa no banco de dados (histórico)
@@ -162,7 +181,26 @@ export async function flushAllPresence() {
   for (const [userId, session] of presenceSessions.entries()) {
     const elapsed = (now - session.lastFlushedAt) / 1000;
     if (elapsed > 0) {
-      await addPresenceTime(userId, session.username, elapsed);
+      const res = await addPresenceTime(userId, session.username, elapsed);
+      if (res && res.leveledUp && client) {
+        try {
+          const channel = client.channels.cache.get(session.channelId) || await client.channels.fetch(session.channelId).catch(() => null);
+          if (channel && channel.guild) {
+            const member = await channel.guild.members.fetch(userId).catch(() => null);
+            if (member) {
+              const { syncMemberNicknameBadges } = await import('./utils/lootSystem.js');
+              syncMemberNicknameBadges(member, true).catch(() => null);
+
+              const textChannel = channel.guild.systemChannel || channel.guild.channels.cache.find(c => c.isTextBased() && c.permissionsFor(channel.guild.members.me).has('SendMessages'));
+              if (textChannel) {
+                await textChannel.send(`✨ **Parabéns, ${member}!** Você subiu de nível em voz e agora é **Nível ${res.newLevel}** (${res.rank})! ⚡`);
+              }
+            }
+          }
+        } catch (err) {
+          console.error('❌ Erro ao processar level up no flushAllPresence:', err.message);
+        }
+      }
       // Atualiza apenas a data do último flush
       session.lastFlushedAt = now;
     }

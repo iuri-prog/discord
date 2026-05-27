@@ -107,11 +107,14 @@ export async function getOrCreateUser(userId, username) {
  * @param {number} seconds - Segundos a adicionar
  */
 export async function addPresenceTime(userId, username, seconds) {
-  if (seconds <= 0) return;
+  if (seconds <= 0) return { leveledUp: false };
 
   // Busca o valor atual
   const user = await getOrCreateUser(userId, username);
-  if (!user) return;
+  if (!user) return { leveledUp: false };
+
+  const { getLevelData } = await import('./utils/levels.js');
+  const oldLvl = getLevelData(user.total_presence_time || 0, user.total_speaking_time || 0, user.bonus_xp || 0).level;
 
   const newTotal = (user.total_presence_time || 0) + Math.floor(seconds);
 
@@ -126,7 +129,15 @@ export async function addPresenceTime(userId, username, seconds) {
 
   if (error) {
     console.error(`❌ Erro ao salvar presença de ${username}:`, error.message);
+    return { leveledUp: false };
   }
+
+  const newLvl = getLevelData(newTotal, user.total_speaking_time || 0, user.bonus_xp || 0);
+  if (newLvl.level > oldLvl) {
+    return { leveledUp: true, oldLevel: oldLvl, newLevel: newLvl.level, rank: newLvl.rank };
+  }
+
+  return { leveledUp: false };
 }
 
 /**
@@ -136,10 +147,13 @@ export async function addPresenceTime(userId, username, seconds) {
  * @param {number} seconds - Segundos a adicionar
  */
 export async function addSpeakingTime(userId, username, seconds) {
-  if (seconds <= 0) return;
+  if (seconds <= 0) return { leveledUp: false };
 
   const user = await getOrCreateUser(userId, username);
-  if (!user) return;
+  if (!user) return { leveledUp: false };
+
+  const { getLevelData } = await import('./utils/levels.js');
+  const oldLvl = getLevelData(user.total_presence_time || 0, user.total_speaking_time || 0, user.bonus_xp || 0).level;
 
   const newTotal = (user.total_speaking_time || 0) + Math.floor(seconds);
 
@@ -153,7 +167,15 @@ export async function addSpeakingTime(userId, username, seconds) {
 
   if (error) {
     console.error(`❌ Erro ao salvar tempo de fala de ${username}:`, error.message);
+    return { leveledUp: false };
   }
+
+  const newLvl = getLevelData(user.total_presence_time || 0, newTotal, user.bonus_xp || 0);
+  if (newLvl.level > oldLvl) {
+    return { leveledUp: true, oldLevel: oldLvl, newLevel: newLvl.level, rank: newLvl.rank };
+  }
+
+  return { leveledUp: false };
 }
 
 /**
