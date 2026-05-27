@@ -348,56 +348,70 @@ export async function getBadgeRarityStats(force = false) {
  * @returns {Object|null} Objeto contendo o melhor amigo ou null
  */
 export async function getBestFriend(userId) {
-  // Puxa todas as sessões. Em produção com milhares de registros, seria melhor usar uma RPC no Supabase.
-  const { data: allSessions, error } = await supabase
-    .from('voice_sessions')
-    .select('user_id, username, channel_id, joined_at, left_at')
-    .not('left_at', 'is', null);
+  try {
+    // 1. Busca apenas as sessões do próprio usuário
+    const { data: userSessions, error: myErr } = await supabase
+      .from('voice_sessions')
+      .select('channel_id, joined_at, left_at')
+      .eq('user_id', userId)
+      .not('left_at', 'is', null);
 
-  if (error || !allSessions) return null;
+    if (myErr || !userSessions || userSessions.length === 0) return null;
 
-  const userSessions = allSessions.filter(s => s.user_id === userId);
-  if (userSessions.length === 0) return null;
+    // Coleta os IDs únicos dos canais frequentados pelo usuário
+    const channelIds = [...new Set(userSessions.map(s => s.channel_id))];
+    if (channelIds.length === 0) return null;
 
-  const overlapMap = {}; // userId -> overlapTime
+    // 2. Busca sessões de outros usuários APENAS nos mesmos canais
+    const { data: otherSessions, error: otherErr } = await supabase
+      .from('voice_sessions')
+      .select('user_id, username, channel_id, joined_at, left_at')
+      .in('channel_id', channelIds)
+      .not('user_id', 'eq', userId)
+      .not('left_at', 'is', null);
 
-  userSessions.forEach(mySession => {
-    const myStart = new Date(mySession.joined_at).getTime();
-    const myEnd = new Date(mySession.left_at).getTime();
+    if (otherErr || !otherSessions || otherSessions.length === 0) return null;
 
-    // Filtra pessoas que estavam no mesmo canal que eu, mas que não sou eu
-    const otherSessions = allSessions.filter(s => 
-      s.channel_id === mySession.channel_id && 
-      s.user_id !== userId
-    );
+    const overlapMap = {}; // userId -> { username, time }
 
-    otherSessions.forEach(otherSession => {
-      const otherStart = new Date(otherSession.joined_at).getTime();
-      const otherEnd = new Date(otherSession.left_at).getTime();
+    userSessions.forEach(mySession => {
+      const myStart = new Date(mySession.joined_at).getTime();
+      const myEnd = new Date(mySession.left_at).getTime();
 
-      const overlapStart = Math.max(myStart, otherStart);
-      const overlapEnd = Math.min(myEnd, otherEnd);
-      const overlap = (overlapEnd - overlapStart) / 1000;
+      // Filtra sessões alheias no mesmo canal
+      const relevant = otherSessions.filter(s => s.channel_id === mySession.channel_id);
 
-      if (overlap > 0) {
-        if (!overlapMap[otherSession.user_id]) {
-          overlapMap[otherSession.user_id] = { username: otherSession.username, time: 0 };
+      relevant.forEach(otherSession => {
+        const otherStart = new Date(otherSession.joined_at).getTime();
+        const otherEnd = new Date(otherSession.left_at).getTime();
+
+        const overlapStart = Math.max(myStart, otherStart);
+        const overlapEnd = Math.min(myEnd, otherEnd);
+        const overlap = (overlapEnd - overlapStart) / 1000;
+
+        if (overlap > 0) {
+          if (!overlapMap[otherSession.user_id]) {
+            overlapMap[otherSession.user_id] = { username: otherSession.username, time: 0 };
+          }
+          overlapMap[otherSession.user_id].time += overlap;
         }
-        overlapMap[otherSession.user_id].time += overlap;
-      }
+      });
     });
-  });
 
-  let bestFriend = null;
-  let maxTime = 0;
-  for (const [id, data] of Object.entries(overlapMap)) {
-    if (data.time > maxTime) {
-      maxTime = data.time;
-      bestFriend = { id, username: data.username, time: data.time };
+    let bestFriend = null;
+    let maxTime = 0;
+    for (const [id, data] of Object.entries(overlapMap)) {
+      if (data.time > maxTime) {
+        maxTime = data.time;
+        bestFriend = { id, username: data.username, time: data.time };
+      }
     }
-  }
 
-  return bestFriend;
+    return bestFriend;
+  } catch (err) {
+    console.error('❌ [DB] Erro ao buscar melhor amigo:', err.message);
+    return null;
+  }
 }
 
 /**

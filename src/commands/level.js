@@ -319,10 +319,10 @@ export async function execute(interaction) {
 
   const targetUser = interaction.options.getUser('usuario') || interaction.user;
 
-  // Sincroniza apelido forçadamente
+  // Sincroniza apelido forçadamente em segundo plano (não bloqueante)
   const member = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
   if (member) {
-    await syncMemberNicknameBadges(member, true).catch(() => null);
+    syncMemberNicknameBadges(member, true).catch(() => null);
   }
 
   // Busca métricas, badges, melhor amigo e economia do autor em paralelo
@@ -405,10 +405,10 @@ export async function handleInteraction(interaction, args) {
       }
       setUserSelectedBadges(authorId, values);
 
-      // Atualiza o apelido imediatamente
+      // Atualiza o apelido em segundo plano (não bloqueante)
       const member = await interaction.guild.members.fetch(authorId).catch(() => null);
       if (member) {
-        await syncMemberNicknameBadges(member, true).catch(() => null);
+        syncMemberNicknameBadges(member, true).catch(() => null);
       }
 
       // Recarrega a página de badges
@@ -435,10 +435,10 @@ export async function handleInteraction(interaction, args) {
       const currentSetting = getShowBadgesSetting(targetId);
       setShowBadgesSetting(targetId, !currentSetting);
 
-      // Atualiza o apelido do membro imediatamente no Discord
+      // Atualiza o apelido do membro em segundo plano (não bloqueante)
       const member = await interaction.guild.members.fetch(targetId).catch(() => null);
       if (member) {
-        await syncMemberNicknameBadges(member, true).catch(() => null);
+        syncMemberNicknameBadges(member, true).catch(() => null);
       }
 
       // Detecta qual aba estava ativa anteriormente para manter o usuário nela
