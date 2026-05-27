@@ -7,7 +7,6 @@
 import https from 'https';
 import ffmpeg from 'ffmpeg-static';
 import { createAudioPlayer, createAudioResource, AudioPlayerStatus, StreamType } from '@discordjs/voice';
-import { getRandomQuote } from '../database.js';
 import fs from 'fs';
 import path from 'path';
 
